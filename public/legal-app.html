@@ -398,7 +398,7 @@ async function analyze(){
 
   // Try DB first
   try {
-    const res = await fetch(`/api/article?law=${encodeURIComponent(law)}&num=${encodeURIComponent(num)}`);
+    const res = await fetch(`/api/public/article?law=${encodeURIComponent(law)}&num=${encodeURIComponent(num)}`);
     if (res.ok) {
       const j = await res.json();
       if (j.found) liveText = j.article_text;
@@ -422,7 +422,7 @@ const LAW_LABEL_SHORT = {penal:'عقوبات', criminal_proc:'إجراءات', c
 
 async function loadStats(){
   try {
-    const res = await fetch('/api/law-stats');
+    const res = await fetch('/api/public/law-stats');
     if (!res.ok) throw new Error();
     const { counts } = await res.json();
     const total = Object.values(counts).reduce((a,b)=>a+b,0);
