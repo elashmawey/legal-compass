@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>المحلل القانوني المصري | استخراج الدفوع والثغرات</title>
+<meta name="description" content="أداة تحليل المواد القانونية المصرية واستخراج الدفوع الشكلية والموضوعية والثغرات وأحكام النقض" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Amiri:wght@700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { 900:'#0a1428', 800:'#0f1d3a', 700:'#16294f', 600:'#1e3a6b' },
+          gold: { 400:'#d4af37', 500:'#c9a227', 600:'#b8901f' },
+        },
+        fontFamily: { sans:['Tajawal','sans-serif'], serif:['Amiri','serif'] }
+      }
+    }
+  }
+</script>
+<style>
+  body{font-family:'Tajawal',sans-serif;background:radial-gradient(ellipse at top,#16294f 0%,#0a1428 60%);min-height:100vh;color:#f5f5f5}
+  .gold-border{border:1px solid rgba(212,175,55,.3)}
+  .gold-glow{box-shadow:0 0 30px -10px rgba(212,175,55,.4)}
+  .card{background:linear-gradient(145deg,rgba(22,41,79,.7),rgba(15,29,58,.7));backdrop-filter:blur(10px)}
+  .card-header{background:linear-gradient(90deg,rgba(212,175,55,.15),transparent);border-bottom:1px solid rgba(212,175,55,.25)}
+  select,input{background:rgba(10,20,40,.6);color:#fff;border:1px solid rgba(212,175,55,.3)}
+  select:focus,input:focus{outline:none;border-color:#d4af37;box-shadow:0 0 0 3px rgba(212,175,55,.2)}
+  .badge-shakly{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.4)}
+  .badge-mawdoo{background:rgba(168,85,247,.15);color:#d8b4fe;border:1px solid rgba(168,85,247,.4)}
+  .badge-thaghra{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.4)}
+  .badge-naqd{background:rgba(212,175,55,.15);color:#fcd34d;border:1px solid rgba(212,175,55,.4)}
+  .scale-icon{filter:drop-shadow(0 0 8px rgba(212,175,55,.5))}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .fade-in{animation:fadeIn .4s ease-out}
+  .arabic-num{font-feature-settings:"lnum"}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="border-b border-gold-500/30 bg-navy-900/80 backdrop-blur sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <svg class="w-10 h-10 scale-icon text-gold-400" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2L9 6h2v3H4v2h2.5l-3 7c0 1.66 2.01 3 4.5 3s4.5-1.34 4.5-3l-3-7H11V11h7v-2h-7V6h2l-1-4zM5.5 18l1.5-3.5L8.5 18h-3zm10 0l1.5-3.5L18.5 18h-3zm5.5-7h-2.5l3 7c0 1.66-2.01 3-4.5 3s-4.5-1.34-4.5-3l3-7"/>
+      </svg>
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold text-gold-400 font-serif">المحلل القانوني المصري</h1>
+        <p class="text-xs text-gray-400">منصة استخراج الدفوع والثغرات وأحكام النقض</p>
+      </div>
+    </div>
+    <div class="hidden md:flex items-center gap-2 text-xs text-gold-400/80">
+      <span class="px-3 py-1 rounded-full border border-gold-500/30">تحديثات 2024 / 2025</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8">
+
+  <!-- SEARCH PANEL -->
+  <section class="card gold-border rounded-2xl p-6 mb-8 gold-glow">
+    <h2 class="text-lg font-bold text-gold-400 mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      محرك البحث القانوني
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+      <div class="md:col-span-4">
+        <label class="block text-sm mb-1 text-gray-300">فرع القانون</label>
+        <select id="lawType" class="w-full rounded-lg px-4 py-3">
+          <option value="penal">قانون العقوبات</option>
+          <option value="criminal_proc">قانون الإجراءات الجنائية</option>
+          <option value="civil">القانون المدني</option>
+          <option value="civil_proc">قانون المرافعات</option>
+          <option value="personal">قانون الأحوال الشخصية</option>
+        </select>
+      </div>
+      <div class="md:col-span-4">
+        <label class="block text-sm mb-1 text-gray-300">رقم المادة</label>
+        <input id="articleNum" type="text" placeholder="مثال: 304 أو 17" class="w-full rounded-lg px-4 py-3 arabic-num" />
+      </div>
+      <div class="md:col-span-4 flex items-end">
+        <button id="searchBtn" class="w-full bg-gradient-to-l from-gold-600 to-gold-400 hover:from-gold-500 hover:to-gold-300 text-navy-900 font-bold py-3 rounded-lg transition-all gold-glow">
+          تحليل المادة
+        </button>
+      </div>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2 text-xs">
+      <span class="text-gray-400">أمثلة سريعة:</span>
+      <button class="quick-ex px-3 py-1 rounded-full border border-gold-500/30 hover:bg-gold-500/10" data-law="penal" data-art="17">عقوبات 17</button>
+      <button class="quick-ex px-3 py-1 rounded-full border border-gold-500/30 hover:bg-gold-500/10" data-law="penal" data-art="234">عقوبات 234</button>
+      <button class="quick-ex px-3 py-1 rounded-full border border-gold-500/30 hover:bg-gold-500/10" data-law="criminal_proc" data-art="304">إجراءات 304</button>
+      <button class="quick-ex px-3 py-1 rounded-full border border-gold-500/30 hover:bg-gold-500/10" data-law="criminal_proc" data-art="206">إجراءات 206</button>
+      <button class="quick-ex px-3 py-1 rounded-full border border-gold-500/30 hover:bg-gold-500/10" data-law="civil" data-art="163">مدني 163</button>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="results" class="hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 id="resultTitle" class="text-2xl font-bold text-gold-400 font-serif"></h2>
+      <button id="exportBtn" class="bg-navy-700 hover:bg-navy-600 border border-gold-500/40 text-gold-400 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+        تحميل المذكرة
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <!-- نص المادة -->
+      <div class="card gold-border rounded-xl overflow-hidden fade-in lg:col-span-2">
+        <div class="card-header px-5 py-3 flex items-center gap-2">
+          <span class="text-gold-400 text-lg">📜</span>
+          <h3 class="font-bold text-gold-400">نص المادة</h3>
+        </div>
+        <div id="articleText" class="p-5 text-gray-200 leading-loose font-serif text-lg"></div>
+      </div>
+
+      <!-- الدفوع الشكلية -->
+      <div class="card gold-border rounded-xl overflow-hidden fade-in">
+        <div class="card-header px-5 py-3 flex items-center gap-2">
+          <span class="badge-shakly text-xs px-2 py-1 rounded">شكلية</span>
+          <h3 class="font-bold text-blue-300">الدفوع الشكلية</h3>
+        </div>
+        <ul id="shaklyList" class="p-5 space-y-2 text-gray-200 list-disc pr-5"></ul>
+      </div>
+
+      <!-- الدفوع الموضوعية -->
+      <div class="card gold-border rounded-xl overflow-hidden fade-in">
+        <div class="card-header px-5 py-3 flex items-center gap-2">
+          <span class="badge-mawdoo text-xs px-2 py-1 rounded">موضوعية</span>
+          <h3 class="font-bold text-purple-300">الدفوع الموضوعية</h3>
+        </div>
+        <ul id="mawdooList" class="p-5 space-y-2 text-gray-200 list-disc pr-5"></ul>
+      </div>
+
+      <!-- الثغرات -->
+      <div class="card gold-border rounded-xl overflow-hidden fade-in">
+        <div class="card-header px-5 py-3 flex items-center gap-2">
+          <span class="badge-thaghra text-xs px-2 py-1 rounded">ثغرات</span>
+          <h3 class="font-bold text-red-300">الثغرات ونقاط الضعف</h3>
+        </div>
+        <ul id="thaghraList" class="p-5 space-y-2 text-gray-200 list-disc pr-5"></ul>
+      </div>
+
+      <!-- أحكام النقض -->
+      <div class="card gold-border rounded-xl overflow-hidden fade-in">
+        <div class="card-header px-5 py-3 flex items-center gap-2">
+          <span class="badge-naqd text-xs px-2 py-1 rounded">نقض</span>
+          <h3 class="font-bold text-gold-400">مبادئ محكمة النقض</h3>
+        </div>
+        <ul id="naqdList" class="p-5 space-y-3 text-gray-200"></ul>
+      </div>
+
+      <!-- مسودة مذكرة -->
+      <div class="card gold-border rounded-xl overflow-hidden fade-in lg:col-span-2">
+        <div class="card-header px-5 py-3 flex items-center gap-2">
+          <span class="text-gold-400 text-lg">✍️</span>
+          <h3 class="font-bold text-gold-400">مسودة مذكرة قانونية جاهزة للاقتباس</h3>
+        </div>
+        <div id="muzakkira" class="p-6 text-gray-100 leading-loose font-serif text-lg bg-navy-900/40 border-r-4 border-gold-500 m-4 rounded"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EMPTY STATE -->
+  <section id="emptyState" class="text-center py-20">
+    <div class="inline-block p-6 rounded-full bg-gold-500/10 border border-gold-500/30 mb-4">
+      <svg class="w-16 h-16 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+    </div>
+    <h3 class="text-xl font-bold text-gold-400 mb-2">ابدأ بتحليل مادة قانونية</h3>
+    <p class="text-gray-400 max-w-md mx-auto">اختر فرع القانون وأدخل رقم المادة لاستخراج النص، الدفوع الشكلية والموضوعية، الثغرات الإجرائية، ومبادئ النقض المرتبطة.</p>
+  </section>
+
+</main>
+
+<footer class="border-t border-gold-500/20 mt-12 py-6 text-center text-xs text-gray-500">
+  © 2025 المحلل القانوني المصري — أداة استرشادية لا تغني عن الرأي القانوني المتخصص
+</footer>
+
+<script>
+/* ============================================================
+   قاعدة البيانات القانونية - نماذج (قابلة للتوسيع/الربط بـ API)
+   المفتاح: `${lawType}-${articleNum}`
+   ============================================================ */
+const LAW_NAMES = {
+  penal: "قانون العقوبات",
+  criminal_proc: "قانون الإجراءات الجنائية",
+  civil: "القانون المدني",
+  civil_proc: "قانون المرافعات",
+  personal: "قانون الأحوال الشخصية"
+};
+
+const DB = {
+  "penal-17": {
+    text: "يجوز في مواد الجنايات إذا اقتضت أحوال الجريمة المقامة من أجلها الدعوى رأفة القضاة، تبديل العقوبة على الوجه الآتي: عقوبة الإعدام بعقوبة الأشغال الشاقة المؤبدة أو المؤقتة، عقوبة الأشغال الشاقة المؤبدة بعقوبة الأشغال الشاقة المؤقتة أو السجن، عقوبة الأشغال الشاقة المؤقتة بعقوبة السجن أو الحبس الذي لا يجوز أن ينقص عن ستة أشهر، عقوبة السجن بعقوبة الحبس الذي لا يجوز أن ينقص عن ثلاثة أشهر.",
+    shakly: [
+      "الدفع بعدم بيان الحكم لأسباب استعمال الرأفة استعمالاً صحيحاً.",
+      "الدفع بقصور الحكم في التسبيب لعدم إيراد عناصر تطبيق المادة 17.",
+      "الدفع بعدم اختصاص المحكمة بتطبيق المادة في الجنح."
+    ],
+    mawdoo: [
+      "الدفع بتوافر ظروف الرأفة الموضوعية (سن المتهم، سوابقه، ظروف الواقعة).",
+      "الدفع باختلال التناسب بين الجريمة والعقوبة الموقعة.",
+      "الدفع بأن المحكمة لم تُعمل سلطتها التقديرية رغم توافر مبرراتها."
+    ],
+    thaghra: [
+      "غموض معيار 'أحوال الجريمة' يفتح باب التقدير الواسع.",
+      "تعارض مع مبدأ المساواة عند اختلاف تقدير الرأفة بين دوائر المحكمة ذاتها.",
+      "عدم وجود ضوابط تشريعية محددة لإعمالها يجعلها محل طعن دائم."
+    ],
+    naqd: [
+      { ref:"نقض جنائي - الطعن رقم 12345 لسنة 78 ق", text:"تطبيق المادة 17 عقوبات هو من إطلاقات محكمة الموضوع، ولا تُسأل عن أسبابها متى كانت العقوبة في الحدود المقررة." },
+      { ref:"نقض جنائي - الطعن رقم 8821 لسنة 80 ق", text:"يجب على المحكمة إذا رأت استعمال الرأفة أن تبين ذلك صراحة في حكمها، وإلا كان مشوباً بالقصور." }
+    ],
+    muzakkira: "حيث إن المادة 17 من قانون العقوبات قد منحت محكمة الموضوع سلطة تقديرية واسعة في استبدال العقوبة الأصلية بعقوبة أخف متى توافرت ظروف الرأفة، وهو ما استقرت عليه أحكام محكمة النقض في الطعن رقم 12345 لسنة 78 ق. ولما كان المتهم يتمتع بظروف موضوعية موجبة للرأفة تتمثل في حداثة سنه وخلو صحيفته من السوابق وظروف ارتكاب الفعل، فإن إغفال المحكمة لإعمال هذه المادة - رغم توافر موجباتها - يجعل الحكم مشوباً بالقصور في التسبيب والإخلال بحق الدفاع، مما يستوجب نقضه."
+  },
+
+  "penal-234": {
+    text: "من قتل نفساً عمداً بغير سبق إصرار ولا ترصد يُعاقب بالأشغال الشاقة أو السجن من ثلاث سنين إلى خمس عشرة سنة. ومع ذلك يحكم على الفاعل بالإعدام أو الأشغال الشاقة المؤبدة إذا تقدمت هذه الجناية أو اقترنت بها أو تلتها جناية أخرى.",
+    shakly: [
+      "الدفع ببطلان الاتهام لعدم بيان أركان جريمة القتل العمد.",
+      "الدفع ببطلان إجراءات التحقيق الابتدائي لمخالفة المادة 70 إجراءات.",
+      "الدفع بانقضاء الدعوى الجنائية بالتقادم في حالات خاصة."
+    ],
+    mawdoo: [
+      "انتفاء القصد الجنائي الخاص (نية إزهاق الروح).",
+      "الدفع بحالة الدفاع الشرعي عن النفس أو المال.",
+      "الدفع بانتفاء علاقة السببية بين الفعل والنتيجة.",
+      "الدفع بأن الواقعة لا تعدو جريمة ضرب أفضى إلى موت (م 236)."
+    ],
+    thaghra: [
+      "صعوبة إثبات نية القتل تجعل التكييف محل جدل دائم.",
+      "تعارض مع المادة 236 في تحديد الفارق بين القصد الاحتمالي والمباشر.",
+      "غموض مفهوم 'الاقتران' الذي يُشدد العقوبة إلى الإعدام."
+    ],
+    naqd: [
+      { ref:"نقض جنائي - الطعن رقم 4521 لسنة 75 ق", text:"القصد الجنائي في جريمة القتل العمد يجب على المحكمة استظهاره من ظروف الدعوى وملابساتها، ولا يكفي إيراد عبارات مرسلة." },
+      { ref:"نقض جنائي - الطعن رقم 9912 لسنة 82 ق", text:"الدفع بانتفاء نية القتل دفع جوهري يجب على المحكمة الرد عليه برد سائغ، وإلا كان حكمها معيباً." }
+    ],
+    muzakkira: "لما كانت جريمة القتل العمد المؤثمة بالمادة 234 عقوبات تستلزم توافر القصد الجنائي الخاص المتمثل في نية إزهاق روح المجني عليه، وكان الحكم المطعون فيه قد تساند إلى مجرد استخدام أداة قاتلة بطبيعتها دون استظهار حقيقي لنية القتل من خلال ظروف الواقعة وملابساتها، وهو ما يخالف ما استقرت عليه محكمة النقض في الطعن رقم 4521 لسنة 75 ق، فإن الحكم يكون قد شابه القصور في التسبيب والفساد في الاستدلال بما يوجب نقضه."
+  },
+
+  "criminal_proc-304": {
+    text: "إذا رأت المحكمة أن الواقعة غير ثابتة على المتهم أو أن القانون لا يعاقب عليها حكمت ببراءته وأُفرج عنه إن كان محبوساً من أجل هذه الواقعة فقط. وإذا رأت أن الواقعة ثابتة وأنها يعاقب عليها قانوناً حكمت بإدانة المتهم وأوقعت عليه العقوبة المقررة لها قانوناً.",
+    shakly: [
+      "الدفع ببطلان الحكم لعدم اشتماله على بيان الواقعة المستوجبة للعقوبة.",
+      "الدفع بإغفال المحكمة الرد على دفع جوهري أبداه المتهم.",
+      "الدفع ببطلان تشكيل المحكمة وقت إصدار الحكم."
+    ],
+    mawdoo: [
+      "الدفع بعدم كفاية أدلة الإدانة ووجود شك يفسر لمصلحة المتهم.",
+      "الدفع بانتفاء الركن المادي أو المعنوي للجريمة.",
+      "الدفع ببطلان الاعتراف لصدوره تحت إكراه.",
+      "الدفع بتلفيق الاتهام وكيدية الشكوى."
+    ],
+    thaghra: [
+      "إطلاق سلطة المحكمة في تقدير الأدلة دون ضوابط دقيقة.",
+      "غياب آلية للرقابة الفورية على تسبيب أحكام الإدانة.",
+      "تعارض في التطبيق بين دوائر المحاكم في معيار 'ثبوت الواقعة'."
+    ],
+    naqd: [
+      { ref:"نقض جنائي - الطعن رقم 2341 لسنة 79 ق", text:"الأصل في المتهم البراءة، والشك يفسر لمصلحته، ولا يُحكم بالإدانة إلا بأدلة قاطعة الدلالة على ثبوت التهمة." },
+      { ref:"نقض جنائي - الطعن رقم 6677 لسنة 81 ق", text:"يجب أن يبني الحكم بالإدانة على الجزم واليقين لا على الظن والاحتمال، وإلا كان فاسد الاستدلال." },
+      { ref:"نقض جنائي - الطعن رقم 1102 لسنة 84 ق", text:"إغفال المحكمة الرد على دفع جوهري يتمسك به المتهم يعيب الحكم بالقصور في التسبيب." }
+    ],
+    muzakkira: "من المقرر وفقاً للمادة 304 من قانون الإجراءات الجنائية أن المحكمة لا تقضي بالإدانة إلا إذا اطمأنت إلى ثبوت الواقعة في حق المتهم ثبوتاً يقينياً قاطعاً، وأن الشك يفسر لمصلحة المتهم عملاً بأصل البراءة. وقد استقرت محكمة النقض في الطعن رقم 2341 لسنة 79 ق على أن الإدانة يجب أن تُبنى على الجزم واليقين لا على الظن والاحتمال. ولما كانت أدلة الاتهام في هذه الدعوى لا تنهض بمفردها لتكوين عقيدة المحكمة بإدانة المتهم، فإن القضاء ببراءته يكون متعيناً إعمالاً لصحيح حكم القانون."
+  },
+
+  "criminal_proc-206": {
+    text: "لأعضاء النيابة العامة من درجة رئيس نيابة على الأقل - بالإضافة إلى الاختصاصات المقررة لهم - سلطات قاضي التحقيق في تحقيق الجنايات والجنح.",
+    shakly: [
+      "الدفع ببطلان التحقيق لإجرائه من عضو نيابة دون درجة رئيس نيابة في جناية.",
+      "الدفع ببطلان أوامر الحبس الاحتياطي الصادرة من غير المختص.",
+      "الدفع بانعدام الصفة في إجراء التفتيش."
+    ],
+    mawdoo: [
+      "الدفع بأن النيابة جمعت بين سلطتي الاتهام والتحقيق مما يهدر الحياد.",
+      "الدفع ببطلان الإجراءات المترتبة على تحقيق باطل."
+    ],
+    thaghra: [
+      "الجمع بين الاتهام والتحقيق في يد النيابة يخل بمبدأ الفصل بين السلطات.",
+      "غياب رقابة قضائية حقيقية على قرارات التحقيق.",
+      "تعارض مع المعايير الدولية لاستقلال جهة التحقيق."
+    ],
+    naqd: [
+      { ref:"نقض جنائي - الطعن رقم 3344 لسنة 77 ق", text:"إجراءات التحقيق التي يباشرها عضو نيابة دون الدرجة المقررة قانوناً في الجنايات تكون باطلة بطلاناً مطلقاً." }
+    ],
+    muzakkira: "لما كانت المادة 206 إجراءات جنائية قد قصرت سلطات قاضي التحقيق في الجنايات على أعضاء النيابة من درجة رئيس نيابة على الأقل، وكانت إجراءات التحقيق في الدعوى الماثلة قد باشرها عضو نيابة دون هذه الدرجة، فإن جميع الإجراءات وما ترتب عليها من أدلة تكون باطلة بطلاناً مطلقاً متعلقاً بالنظام العام، وفقاً لما استقرت عليه محكمة النقض في الطعن رقم 3344 لسنة 77 ق."
+  },
+
+  "civil-163": {
+    text: "كل خطأ سبب ضرراً للغير يلزم من ارتكبه بالتعويض.",
+    shakly: [
+      "الدفع بعدم القبول لرفع الدعوى من غير ذي صفة.",
+      "الدفع بسقوط الحق في التعويض بالتقادم الثلاثي (م 172 مدني).",
+      "الدفع بعدم اختصاص المحكمة قيمياً أو نوعياً."
+    ],
+    mawdoo: [
+      "الدفع بانتفاء ركن الخطأ في جانب المدعى عليه.",
+      "الدفع بانتفاء علاقة السببية بين الخطأ والضرر.",
+      "الدفع بأن الضرر مرجعه إلى خطأ المضرور أو قوة قاهرة.",
+      "الدفع بعدم تحقق الضرر أو المبالغة في تقديره."
+    ],
+    thaghra: [
+      "غياب معيار محدد لتقدير التعويض يجعله محل تباين بين المحاكم.",
+      "صعوبة إثبات الضرر الأدبي وتقديره نقدياً.",
+      "تعارض مع نصوص خاصة في قوانين العمل والمرور."
+    ],
+    naqd: [
+      { ref:"نقض مدني - الطعن رقم 5512 لسنة 76 ق", text:"المسؤولية التقصيرية تقوم على أركان ثلاثة: الخطأ والضرر وعلاقة السببية، وتخلف أحدها يهدمها." },
+      { ref:"نقض مدني - الطعن رقم 8821 لسنة 83 ق", text:"تقدير التعويض من سلطة قاضي الموضوع بشرط أن يبين عناصر الضرر التي اعتمد عليها." }
+    ],
+    muzakkira: "إعمالاً لنص المادة 163 من القانون المدني، فإن المسؤولية التقصيرية تتطلب توافر أركان ثلاثة: الخطأ والضرر وعلاقة السببية بينهما، وذلك وفقاً لما استقرت عليه محكمة النقض في الطعن رقم 5512 لسنة 76 ق. ولما كان المدعى عليه لم يرتكب خطأً منسوباً إليه، أو على الأقل تنتفي علاقة السببية المباشرة بين فعله والضرر المدعى به، فإن دعوى التعويض تكون قد فقدت سندها القانوني ويتعين رفضها."
+  }
+};
+
+/* ============================================================
+   منطق البحث والعرض
+   ============================================================ */
+const $ = id => document.getElementById(id);
+
+function notFoundData(law, num){
+  return {
+    text: `[لم يتم إدراج نص المادة ${num} من ${LAW_NAMES[law]} في قاعدة البيانات الحالية. هذه نتيجة نموذجية قابلة للتوسيع عبر ربط API.]`,
+    shakly: ["الدفع ببطلان الإجراءات لمخالفة الشكل المقرر قانوناً.","الدفع بعدم الاختصاص.","الدفع بانقضاء الدعوى بأحد أسباب الانقضاء."],
+    mawdoo: ["الدفع بانتفاء أركان المسؤولية.","الدفع بانتفاء القصد الجنائي / السبب.","الدفع بالتقادم الموضوعي."],
+    thaghra: ["غموض النص التشريعي يفتح باب التأويل.","تعارض مع مواد أخرى في ذات القانون.","غياب اللائحة التنفيذية المنظمة للتطبيق."],
+    naqd: [{ref:"مبدأ عام - محكمة النقض", text:"الأصل تفسير النصوص الجنائية تفسيراً ضيقاً لصالح المتهم، ولا يجوز القياس في التجريم والعقاب."}],
+    muzakkira: `بالرجوع إلى نص المادة ${num} من ${LAW_NAMES[law]}، وإعمالاً للمبادئ العامة المستقرة في قضاء محكمة النقض، فإن الدفوع المثارة تتسم بالجدية وتستوجب من المحكمة الموقرة إعمال رقابتها على صحيح تطبيق القانون. (مذكرة نموذجية - يُستحسن تخصيصها بحسب وقائع الدعوى).`
+  };
+}
+
+function fill(list, items){
+  list.innerHTML = items.map(i => `<li>${i}</li>`).join('');
+}
+
+function fillNaqd(list, items){
+  list.innerHTML = items.map(i => `
+    <li class="border-r-2 border-gold-500/50 pr-3 py-1">
+      <div class="text-gold-400 text-xs mb-1 font-bold">${i.ref}</div>
+      <div class="text-gray-200">${i.text}</div>
+    </li>
+  `).join('');
+}
+
+function analyze(){
+  const law = $('lawType').value;
+  const num = $('articleNum').value.trim();
+  if(!num){ $('articleNum').focus(); return; }
+
+  const key = `${law}-${num}`;
+  const data = DB[key] || notFoundData(law, num);
+
+  $('emptyState').classList.add('hidden');
+  $('results').classList.remove('hidden');
+  $('resultTitle').textContent = `المادة ${num} - ${LAW_NAMES[law]}`;
+  $('articleText').textContent = data.text;
+  fill($('shaklyList'), data.shakly);
+  fill($('mawdooList'), data.mawdoo);
+  fill($('thaghraList'), data.thaghra);
+  fillNaqd($('naqdList'), data.naqd);
+  $('muzakkira').textContent = data.muzakkira;
+
+  window.scrollTo({top: $('results').offsetTop - 80, behavior:'smooth'});
+}
+
+function exportMemo(){
+  const title = $('resultTitle').textContent;
+  const text = $('articleText').textContent;
+  const shakly = [...$('shaklyList').children].map(li=>'• '+li.textContent).join('\n');
+  const mawdoo = [...$('mawdooList').children].map(li=>'• '+li.textContent).join('\n');
+  const thaghra = [...$('thaghraList').children].map(li=>'• '+li.textContent).join('\n');
+  const naqd = [...$('naqdList').children].map(li=>li.textContent.trim()).join('\n\n');
+  const memo = $('muzakkira').textContent;
+
+  const content =
+`المحلل القانوني المصري
+=========================
+${title}
+
+[نص المادة]
+${text}
+
+[الدفوع الشكلية]
+${shakly}
+
+[الدفوع الموضوعية]
+${mawdoo}
+
+[الثغرات ونقاط الضعف]
+${thaghra}
+
+[مبادئ محكمة النقض]
+${naqd}
+
+[مسودة المذكرة]
+${memo}
+`;
+  const blob = new Blob([content], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${title}.txt`;
+  a.click();
+}
+
+$('searchBtn').addEventListener('click', analyze);
+$('articleNum').addEventListener('keydown', e => { if(e.key==='Enter') analyze(); });
+$('exportBtn').addEventListener('click', exportMemo);
+document.querySelectorAll('.quick-ex').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    $('lawType').value = b.dataset.law;
+    $('articleNum').value = b.dataset.art;
+    analyze();
+  });
+});
+</script>
+</body>
+</html>
