@@ -10,27 +10,22 @@ const CORS = {
 // Parses Firecrawl markdown of a manshurat.org law page into individual articles.
 // Articles are introduced by a line containing "المادة <number>" (number may include Arabic digits or "مكرراً").
 function parseArticles(markdown: string): { number: string; text: string }[] {
-  const lines = markdown.split('\n');
-  // Regex: line that IS just "المادة N" optionally followed by مكرر/مكررا/مكرراً and digits/letters
-  const headerRe = /^\s*\**\s*المادة\s+([\u0660-\u0669\u06F0-\u06F90-9]+(?:\s*مكرر[اًآى]?)?(?:\s*\([^)]+\)?)?)\s*\**\s*$/;
-  const out: { number: string; text: string }[] = [];
-  let current: { number: string; buf: string[] } | null = null;
-  const flush = () => {
-    if (current) {
-      const text = current.buf.join('\n').trim();
-      if (text) out.push({ number: normalizeNumber(current.number), text });
-    }
-  };
-  for (const raw of lines) {
-    const m = raw.match(headerRe);
-    if (m) {
-      flush();
-      current = { number: m[1].trim(), buf: [] };
-    } else if (current) {
-      current.buf.push(raw);
-    }
+  // Normalize broken PDF spacings: "م ادة" → "مادة", strip markdown bold markers
+  let text = markdown.replace(/م\s+ادة/g, 'مادة').replace(/\*\*/g, '');
+  // Global regex matches both "المادة N" and "مادة N" anywhere (inline or line-start)
+  const headerRe = /(?:^|[\s\n>])(?:ال)?مادة\s+([\u0660-\u0669\u06F0-\u06F90-9]+(?:\s*مكرر[اًآى]?)?)\s*[-–—:)]?/g;
+  const matches: { num: string; idx: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = headerRe.exec(text)) !== null) {
+    matches.push({ num: m[1].trim(), idx: m.index, end: headerRe.lastIndex });
   }
-  flush();
+  const out: { number: string; text: string }[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const cur = matches[i];
+    const nxt = matches[i + 1];
+    const body = text.slice(cur.end, nxt ? nxt.idx : text.length).trim();
+    if (body && body.length > 5) out.push({ number: normalizeNumber(cur.num), text: body });
+  }
   // Dedupe — keep longest text per number
   const map = new Map<string, string>();
   for (const a of out) {
