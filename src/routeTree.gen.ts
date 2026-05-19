@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicLawStatsRouteImport } from './routes/api/public/law-stats'
 import { Route as ApiPublicIngestLawRouteImport } from './routes/api/public/ingest-law'
 import { Route as ApiPublicArticleRouteImport } from './routes/api/public/article'
+import { Route as ApiPublicAnalyzeRouteImport } from './routes/api/public/analyze'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,15 +35,22 @@ const ApiPublicArticleRoute = ApiPublicArticleRouteImport.update({
   path: '/api/public/article',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAnalyzeRoute = ApiPublicAnalyzeRouteImport.update({
+  id: '/api/public/analyze',
+  path: '/api/public/analyze',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/analyze': typeof ApiPublicAnalyzeRoute
   '/api/public/article': typeof ApiPublicArticleRoute
   '/api/public/ingest-law': typeof ApiPublicIngestLawRoute
   '/api/public/law-stats': typeof ApiPublicLawStatsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/analyze': typeof ApiPublicAnalyzeRoute
   '/api/public/article': typeof ApiPublicArticleRoute
   '/api/public/ingest-law': typeof ApiPublicIngestLawRoute
   '/api/public/law-stats': typeof ApiPublicLawStatsRoute
@@ -50,6 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/analyze': typeof ApiPublicAnalyzeRoute
   '/api/public/article': typeof ApiPublicArticleRoute
   '/api/public/ingest-law': typeof ApiPublicIngestLawRoute
   '/api/public/law-stats': typeof ApiPublicLawStatsRoute
@@ -58,18 +67,21 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/public/analyze'
     | '/api/public/article'
     | '/api/public/ingest-law'
     | '/api/public/law-stats'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/public/analyze'
     | '/api/public/article'
     | '/api/public/ingest-law'
     | '/api/public/law-stats'
   id:
     | '__root__'
     | '/'
+    | '/api/public/analyze'
     | '/api/public/article'
     | '/api/public/ingest-law'
     | '/api/public/law-stats'
@@ -77,6 +89,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicAnalyzeRoute: typeof ApiPublicAnalyzeRoute
   ApiPublicArticleRoute: typeof ApiPublicArticleRoute
   ApiPublicIngestLawRoute: typeof ApiPublicIngestLawRoute
   ApiPublicLawStatsRoute: typeof ApiPublicLawStatsRoute
@@ -112,11 +125,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicArticleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/analyze': {
+      id: '/api/public/analyze'
+      path: '/api/public/analyze'
+      fullPath: '/api/public/analyze'
+      preLoaderRoute: typeof ApiPublicAnalyzeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicAnalyzeRoute: ApiPublicAnalyzeRoute,
   ApiPublicArticleRoute: ApiPublicArticleRoute,
   ApiPublicIngestLawRoute: ApiPublicIngestLawRoute,
   ApiPublicLawStatsRoute: ApiPublicLawStatsRoute,
