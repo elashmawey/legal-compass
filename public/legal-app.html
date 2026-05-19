@@ -393,29 +393,60 @@ async function analyze(){
   $('articleText').textContent = 'جارٍ التحميل من قاعدة البيانات...';
 
   const key = `${law}-${num}`;
-  let data = DB[key];
+  let data = DB[key] ? { ...DB[key] } : notFoundData(law, num);
   let liveText = null;
 
-  // Try DB first
+  // 1) Fetch the official article text from DB
   try {
     const res = await fetch(`/api/public/article?law=${encodeURIComponent(law)}&num=${encodeURIComponent(num)}`);
     if (res.ok) {
       const j = await res.json();
       if (j.found) liveText = j.article_text;
     }
-  } catch (e) { /* offline / no backend - fallback */ }
+  } catch (e) { /* offline */ }
 
-  if (!data) data = notFoundData(law, num);
-  if (liveText) data = { ...data, text: liveText };
-
+  if (liveText) data.text = liveText;
   $('articleText').textContent = data.text;
-  fill($('shaklyList'), data.shakly);
-  fill($('mawdooList'), data.mawdoo);
-  fill($('thaghraList'), data.thaghra);
-  fillNaqd($('naqdList'), data.naqd);
-  $('muzakkira').textContent = data.muzakkira;
+
+  // 2) Show placeholders while AI works
+  const loading = ['⏳ جارٍ التحليل بالذكاء الاصطناعي...'];
+  fill($('shaklyList'), loading);
+  fill($('mawdooList'), loading);
+  fill($('thaghraList'), loading);
+  fillNaqd($('naqdList'), [{ref:'⏳', text:'جارٍ استخراج مبادئ النقض...'}]);
+  $('muzakkira').textContent = '⏳ جارٍ صياغة المذكرة...';
 
   window.scrollTo({top: $('results').offsetTop - 80, behavior:'smooth'});
+
+  // 3) Call AI analyzer
+  try {
+    const aiRes = await fetch('/api/public/analyze', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ law, num, text: liveText || data.text })
+    });
+    const aj = await aiRes.json();
+    if (!aiRes.ok || !aj.ok) {
+      const msg = aj.detail || aj.error || `HTTP ${aiRes.status}`;
+      fill($('shaklyList'), [`⚠️ تعذّر التحليل: ${msg}`]);
+      fill($('mawdooList'), data.mawdoo);
+      fill($('thaghraList'), data.thaghra);
+      fillNaqd($('naqdList'), data.naqd);
+      $('muzakkira').textContent = data.muzakkira;
+      return;
+    }
+    fill($('shaklyList'), aj.shakly || data.shakly);
+    fill($('mawdooList'), aj.mawdoo || data.mawdoo);
+    fill($('thaghraList'), aj.thaghra || data.thaghra);
+    fillNaqd($('naqdList'), aj.naqd || data.naqd);
+    $('muzakkira').textContent = aj.muzakkira || data.muzakkira;
+  } catch (e) {
+    fill($('shaklyList'), [`⚠️ خطأ شبكي: ${e.message}`]);
+    fill($('mawdooList'), data.mawdoo);
+    fill($('thaghraList'), data.thaghra);
+    fillNaqd($('naqdList'), data.naqd);
+    $('muzakkira').textContent = data.muzakkira;
+  }
 }
 
 const LAW_LABEL_SHORT = {penal:'عقوبات', criminal_proc:'إجراءات', civil:'مدني', civil_proc:'مرافعات', personal:'أحوال شخصية'};
