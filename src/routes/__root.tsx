@@ -72,14 +72,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Lex Egypt" },
+      { name: "description", content: "Legal Compass analyzes Egyptian legal articles, extracting defenses, loopholes, and related case law." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Lex Egypt" },
+      { property: "og:description", content: "Legal Compass analyzes Egyptian legal articles, extracting defenses, loopholes, and related case law." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Lex Egypt" },
+      { name: "twitter:description", content: "Legal Compass analyzes Egyptian legal articles, extracting defenses, loopholes, and related case law." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/vwpYftj0L4P1qoYp0Ze1WaG6zhB2/social-images/social-1779231380932-2026-05-20_01-55-01__عايز-لوجو-لتطبيق-تحليل-المواد-القانونية-المصريةMak.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/vwpYftj0L4P1qoYp0Ze1WaG6zhB2/social-images/social-1779231380932-2026-05-20_01-55-01__عايز-لوجو-لتطبيق-تحليل-المواد-القانونية-المصريةMak.webp" },
     ],
     links: [
       {
