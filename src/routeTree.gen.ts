@@ -10,33 +10,68 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiLawStatsRouteImport } from './routes/api/law-stats'
+import { Route as ApiArticleRouteImport } from './routes/api/article'
+import { Route as ApiPublicIngestLawRouteImport } from './routes/api/public/ingest-law'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLawStatsRoute = ApiLawStatsRouteImport.update({
+  id: '/api/law-stats',
+  path: '/api/law-stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiArticleRoute = ApiArticleRouteImport.update({
+  id: '/api/article',
+  path: '/api/article',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicIngestLawRoute = ApiPublicIngestLawRouteImport.update({
+  id: '/api/public/ingest-law',
+  path: '/api/public/ingest-law',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/article': typeof ApiArticleRoute
+  '/api/law-stats': typeof ApiLawStatsRoute
+  '/api/public/ingest-law': typeof ApiPublicIngestLawRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/article': typeof ApiArticleRoute
+  '/api/law-stats': typeof ApiLawStatsRoute
+  '/api/public/ingest-law': typeof ApiPublicIngestLawRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/article': typeof ApiArticleRoute
+  '/api/law-stats': typeof ApiLawStatsRoute
+  '/api/public/ingest-law': typeof ApiPublicIngestLawRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/article' | '/api/law-stats' | '/api/public/ingest-law'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/article' | '/api/law-stats' | '/api/public/ingest-law'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/article'
+    | '/api/law-stats'
+    | '/api/public/ingest-law'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiArticleRoute: typeof ApiArticleRoute
+  ApiLawStatsRoute: typeof ApiLawStatsRoute
+  ApiPublicIngestLawRoute: typeof ApiPublicIngestLawRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +83,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/law-stats': {
+      id: '/api/law-stats'
+      path: '/api/law-stats'
+      fullPath: '/api/law-stats'
+      preLoaderRoute: typeof ApiLawStatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/article': {
+      id: '/api/article'
+      path: '/api/article'
+      fullPath: '/api/article'
+      preLoaderRoute: typeof ApiArticleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest-law': {
+      id: '/api/public/ingest-law'
+      path: '/api/public/ingest-law'
+      fullPath: '/api/public/ingest-law'
+      preLoaderRoute: typeof ApiPublicIngestLawRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiArticleRoute: ApiArticleRoute,
+  ApiLawStatsRoute: ApiLawStatsRoute,
+  ApiPublicIngestLawRoute: ApiPublicIngestLawRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
