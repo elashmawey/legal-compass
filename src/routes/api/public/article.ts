@@ -7,7 +7,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-export const Route = createFileRoute('/api/article')({
+export const Route = createFileRoute('/api/public/article')({
   server: {
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),

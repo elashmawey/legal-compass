@@ -95,6 +95,43 @@
       <button class="quick-ex px-3 py-1 rounded-full border border-gold-500/30 hover:bg-gold-500/10" data-law="criminal_proc" data-art="206">إجراءات 206</button>
       <button class="quick-ex px-3 py-1 rounded-full border border-gold-500/30 hover:bg-gold-500/10" data-law="civil" data-art="163">مدني 163</button>
     </div>
+    <div class="mt-3 text-xs text-gray-400" id="dbStatus">جارٍ تحميل إحصاءات قاعدة البيانات...</div>
+  </section>
+
+  <!-- ADMIN INGEST PANEL -->
+  <section class="card gold-border rounded-2xl p-6 mb-8">
+    <details>
+      <summary class="cursor-pointer text-gold-400 font-bold flex items-center gap-2">
+        <span>⚙️</span> لوحة الإدارة - استيراد قانون كامل (Firecrawl)
+      </summary>
+      <div class="mt-4 space-y-3 text-sm">
+        <p class="text-gray-300 leading-relaxed">
+          أدخل رمز الاستيراد السرّي (INGEST_TOKEN) ثم اختر القانون. سيتم جلب نصوصه كاملة من المصدر الرسمي وتخزينها في قاعدة بيانات Lovable Cloud. بعدها أي بحث عن مادة سيعرض النص الأصلي تلقائياً.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <input id="ingestToken" type="password" placeholder="رمز الاستيراد السرّي" class="md:col-span-4 rounded-lg px-3 py-2"/>
+          <select id="ingestLawType" class="md:col-span-3 rounded-lg px-3 py-2">
+            <option value="penal">قانون العقوبات</option>
+            <option value="criminal_proc">قانون الإجراءات الجنائية</option>
+            <option value="civil">القانون المدني</option>
+            <option value="civil_proc">قانون المرافعات</option>
+            <option value="personal">قانون الأحوال الشخصية</option>
+          </select>
+          <input id="ingestUrl" type="url" placeholder="رابط القانون على manshurat.org" class="md:col-span-5 rounded-lg px-3 py-2" value="https://manshurat.org/node/14677"/>
+        </div>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <button class="preset-url px-3 py-1 rounded border border-gold-500/30 hover:bg-gold-500/10" data-law="penal" data-url="https://manshurat.org/node/14677">عقوبات</button>
+          <button class="preset-url px-3 py-1 rounded border border-gold-500/30 hover:bg-gold-500/10" data-law="criminal_proc" data-url="https://manshurat.org/node/14953">إجراءات جنائية</button>
+          <button class="preset-url px-3 py-1 rounded border border-gold-500/30 hover:bg-gold-500/10" data-law="civil" data-url="https://manshurat.org/node/14676">مدني</button>
+          <button class="preset-url px-3 py-1 rounded border border-gold-500/30 hover:bg-gold-500/10" data-law="civil_proc" data-url="https://manshurat.org/node/14674">مرافعات</button>
+          <button class="preset-url px-3 py-1 rounded border border-gold-500/30 hover:bg-gold-500/10" data-law="personal" data-url="https://manshurat.org/node/29447">أحوال شخصية</button>
+        </div>
+        <button id="ingestBtn" class="bg-gradient-to-l from-gold-600 to-gold-400 text-navy-900 font-bold px-5 py-2 rounded-lg">
+          بدء الاستيراد
+        </button>
+        <div id="ingestResult" class="text-sm text-gray-300 whitespace-pre-wrap"></div>
+      </div>
+    </details>
   </section>
 
   <!-- RESULTS -->
@@ -345,17 +382,32 @@ function fillNaqd(list, items){
   `).join('');
 }
 
-function analyze(){
+async function analyze(){
   const law = $('lawType').value;
   const num = $('articleNum').value.trim();
   if(!num){ $('articleNum').focus(); return; }
 
-  const key = `${law}-${num}`;
-  const data = DB[key] || notFoundData(law, num);
-
   $('emptyState').classList.add('hidden');
   $('results').classList.remove('hidden');
   $('resultTitle').textContent = `المادة ${num} - ${LAW_NAMES[law]}`;
+  $('articleText').textContent = 'جارٍ التحميل من قاعدة البيانات...';
+
+  const key = `${law}-${num}`;
+  let data = DB[key];
+  let liveText = null;
+
+  // Try DB first
+  try {
+    const res = await fetch(`/api/public/article?law=${encodeURIComponent(law)}&num=${encodeURIComponent(num)}`);
+    if (res.ok) {
+      const j = await res.json();
+      if (j.found) liveText = j.article_text;
+    }
+  } catch (e) { /* offline / no backend - fallback */ }
+
+  if (!data) data = notFoundData(law, num);
+  if (liveText) data = { ...data, text: liveText };
+
   $('articleText').textContent = data.text;
   fill($('shaklyList'), data.shakly);
   fill($('mawdooList'), data.mawdoo);
@@ -364,6 +416,43 @@ function analyze(){
   $('muzakkira').textContent = data.muzakkira;
 
   window.scrollTo({top: $('results').offsetTop - 80, behavior:'smooth'});
+}
+
+const LAW_LABEL_SHORT = {penal:'عقوبات', criminal_proc:'إجراءات', civil:'مدني', civil_proc:'مرافعات', personal:'أحوال شخصية'};
+
+async function loadStats(){
+  try {
+    const res = await fetch('/api/public/law-stats');
+    if (!res.ok) throw new Error();
+    const { counts } = await res.json();
+    const total = Object.values(counts).reduce((a,b)=>a+b,0);
+    if (total === 0) { $('dbStatus').textContent = 'قاعدة البيانات فارغة. افتح لوحة الإدارة لاستيراد القوانين.'; return; }
+    const parts = Object.entries(counts).map(([k,v])=>`${LAW_LABEL_SHORT[k]||k}: ${v}`);
+    $('dbStatus').textContent = `📚 محفوظ: ${total} مادة (${parts.join(' • ')})`;
+  } catch { $('dbStatus').textContent = '⚠️ تعذّر الاتصال بالخادم.'; }
+}
+
+async function runIngest(){
+  const token = $('ingestToken').value.trim();
+  const lawType = $('ingestLawType').value;
+  const sourceUrl = $('ingestUrl').value.trim();
+  if (!token || !sourceUrl) { $('ingestResult').textContent = 'يلزم إدخال الرمز والرابط.'; return; }
+  $('ingestResult').textContent = '⏳ جارٍ الكشط من المصدر وتحليل النصوص... قد يستغرق 30-90 ثانية.';
+  $('ingestBtn').disabled = true;
+  try {
+    const res = await fetch('/api/public/ingest-law', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-ingest-token': token },
+      body: JSON.stringify({ lawType, sourceUrl }),
+    });
+    const j = await res.json();
+    if (!res.ok) { $('ingestResult').textContent = `❌ فشل (${res.status}): ${j.error||''}\n${j.detail||j.preview||''}`; }
+    else {
+      $('ingestResult').textContent = `✅ تم استيراد ${j.count} مادة من ${LAW_LABEL_SHORT[lawType]}.\nعينة: ${j.sample.map(s=>`المادة ${s.number}`).join(', ')}`;
+      loadStats();
+    }
+  } catch (e) { $('ingestResult').textContent = '❌ خطأ شبكي: ' + e.message; }
+  finally { $('ingestBtn').disabled = false; }
 }
 
 function exportMemo(){
@@ -408,6 +497,7 @@ ${memo}
 $('searchBtn').addEventListener('click', analyze);
 $('articleNum').addEventListener('keydown', e => { if(e.key==='Enter') analyze(); });
 $('exportBtn').addEventListener('click', exportMemo);
+$('ingestBtn').addEventListener('click', runIngest);
 document.querySelectorAll('.quick-ex').forEach(b=>{
   b.addEventListener('click', ()=>{
     $('lawType').value = b.dataset.law;
@@ -415,6 +505,13 @@ document.querySelectorAll('.quick-ex').forEach(b=>{
     analyze();
   });
 });
+document.querySelectorAll('.preset-url').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    $('ingestLawType').value = b.dataset.law;
+    $('ingestUrl').value = b.dataset.url;
+  });
+});
+loadStats();
 </script>
 </body>
 </html>
