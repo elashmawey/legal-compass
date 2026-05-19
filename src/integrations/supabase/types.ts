@@ -14,7 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      legal_articles: {
+        Row: {
+          article_number: string
+          article_text: string
+          id: string
+          law_type: string
+          scraped_at: string
+          source_url: string | null
+        }
+        Insert: {
+          article_number: string
+          article_text: string
+          id?: string
+          law_type: string
+          scraped_at?: string
+          source_url?: string | null
+        }
+        Update: {
+          article_number?: string
+          article_text?: string
+          id?: string
+          law_type?: string
+          scraped_at?: string
+          source_url?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
