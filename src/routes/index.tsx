@@ -170,13 +170,35 @@ function LegalApp() {
         setLoadingAi(false);
         return;
       }
+      const toStr = (x: unknown): string => {
+        if (typeof x === "string") return x;
+        if (x && typeof x === "object") {
+          const o = x as Record<string, unknown>;
+          return String(o.text ?? o.value ?? o.title ?? o.content ?? JSON.stringify(o));
+        }
+        return String(x ?? "");
+      };
+      const arr = (v: unknown): string[] =>
+        Array.isArray(v) ? v.map(toStr).map((s) => s.trim()).filter((s) => s.length > 0) : [];
+      const naqdArr: NaqdItem[] = Array.isArray(aj.naqd)
+        ? aj.naqd
+            .map((n: unknown): NaqdItem => {
+              if (typeof n === "string") return { ref: "مبدأ مستقر - محكمة النقض المصرية", text: n };
+              const o = (n || {}) as Record<string, unknown>;
+              return {
+                ref: String(o.ref ?? o.reference ?? o.source ?? "مبدأ مستقر - محكمة النقض المصرية").trim(),
+                text: String(o.text ?? o.principle ?? o.content ?? "").trim(),
+              };
+            })
+            .filter((n) => n.text.length > 0)
+        : [];
       setData({
         text: liveText || base.text,
-        shakly: aj.shakly || [],
-        mawdoo: aj.mawdoo || [],
-        thaghra: aj.thaghra || [],
-        naqd: aj.naqd || [],
-        muzakkira: aj.muzakkira || "",
+        shakly: arr(aj.shakly),
+        mawdoo: arr(aj.mawdoo),
+        thaghra: arr(aj.thaghra),
+        naqd: naqdArr,
+        muzakkira: toStr(aj.muzakkira),
       });
     } catch (e) {
       setAiError(`خطأ شبكي: ${(e as Error).message}`);
