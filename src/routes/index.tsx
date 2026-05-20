@@ -190,7 +190,7 @@ function LegalApp() {
                 text: String(o.text ?? o.principle ?? o.content ?? "").trim(),
               };
             })
-            .filter((n) => n.text.length > 0)
+            .filter((n: NaqdItem) => n.text.length > 0)
         : [];
       setData({
         text: liveText || base.text,
