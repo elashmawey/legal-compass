@@ -170,13 +170,35 @@ function LegalApp() {
         setLoadingAi(false);
         return;
       }
+      const toStr = (x: unknown): string => {
+        if (typeof x === "string") return x;
+        if (x && typeof x === "object") {
+          const o = x as Record<string, unknown>;
+          return String(o.text ?? o.value ?? o.title ?? o.content ?? JSON.stringify(o));
+        }
+        return String(x ?? "");
+      };
+      const arr = (v: unknown): string[] =>
+        Array.isArray(v) ? v.map(toStr).map((s) => s.trim()).filter((s) => s.length > 0) : [];
+      const naqdArr: NaqdItem[] = Array.isArray(aj.naqd)
+        ? aj.naqd
+            .map((n: unknown): NaqdItem => {
+              if (typeof n === "string") return { ref: "مبدأ مستقر - محكمة النقض المصرية", text: n };
+              const o = (n || {}) as Record<string, unknown>;
+              return {
+                ref: String(o.ref ?? o.reference ?? o.source ?? "مبدأ مستقر - محكمة النقض المصرية").trim(),
+                text: String(o.text ?? o.principle ?? o.content ?? "").trim(),
+              };
+            })
+            .filter((n: NaqdItem) => n.text.length > 0)
+        : [];
       setData({
         text: liveText || base.text,
-        shakly: aj.shakly || [],
-        mawdoo: aj.mawdoo || [],
-        thaghra: aj.thaghra || [],
-        naqd: aj.naqd || [],
-        muzakkira: aj.muzakkira || "",
+        shakly: arr(aj.shakly),
+        mawdoo: arr(aj.mawdoo),
+        thaghra: arr(aj.thaghra),
+        naqd: naqdArr,
+        muzakkira: toStr(aj.muzakkira),
       });
     } catch (e) {
       setAiError(`خطأ شبكي: ${(e as Error).message}`);
@@ -213,36 +235,95 @@ function LegalApp() {
     }
   };
 
-  const exportMemo = () => {
-    if (!data) return;
-    const lines = [
+  const buildMemoText = () => {
+    if (!data) return "";
+    return [
       "المحلل القانوني المصري",
       "=========================",
       resultTitle,
+      `تاريخ الإصدار: ${new Date().toLocaleDateString("ar-EG")}`,
       "",
       "[نص المادة]",
       data.text,
       "",
       "[الدفوع الشكلية]",
-      ...data.shakly.map((s) => "• " + s),
+      ...(data.shakly.length ? data.shakly.map((s) => "• " + s) : ["لا توجد."]),
       "",
       "[الدفوع الموضوعية]",
-      ...data.mawdoo.map((s) => "• " + s),
+      ...(data.mawdoo.length ? data.mawdoo.map((s) => "• " + s) : ["لا توجد."]),
       "",
       "[الثغرات ونقاط الضعف]",
-      ...data.thaghra.map((s) => "• " + s),
+      ...(data.thaghra.length ? data.thaghra.map((s) => "• " + s) : ["لا توجد."]),
       "",
       "[مبادئ محكمة النقض]",
-      ...data.naqd.map((n) => `${n.ref}\n${n.text}`),
+      ...(data.naqd.length
+        ? data.naqd.flatMap((n) => [`— ${n.ref}`, `  ${n.text}`, ""])
+        : ["لا توجد."]),
       "",
       "[مسودة المذكرة]",
-      data.muzakkira,
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+      data.muzakkira || "—",
+      "",
+      "—",
+      "أداة استرشادية لا تغني عن الرأي القانوني المتخصص.",
+    ].join("\n");
+  };
+
+  const exportMemoTxt = () => {
+    if (!data) return;
+    const blob = new Blob([buildMemoText()], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${resultTitle}.txt`;
     a.click();
+  };
+
+  const exportMemoPdf = () => {
+    if (!data) return;
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const list = (items: string[]) =>
+      items.length
+        ? `<ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`
+        : `<p class="muted">لا توجد.</p>`;
+    const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<title>${esc(resultTitle)}</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font-family: 'Tajawal','Segoe UI',Tahoma,sans-serif; color:#111; line-height:1.8; }
+  h1 { color:#1e3a8a; border-bottom:2px solid #d4af37; padding-bottom:.25rem; }
+  h2 { color:#1e3a8a; margin-top:1.4rem; border-right:4px solid #d4af37; padding-right:.5rem; }
+  .meta { color:#555; font-size:.85rem; margin-bottom:1rem; }
+  .text { background:#faf7ee; border:1px solid #e6dcb8; padding:1rem; border-radius:.5rem; }
+  ul { padding-right:1.25rem; }
+  li { margin:.25rem 0; }
+  .naqd { border-right:3px solid #d4af37; padding:.4rem .75rem; margin:.5rem 0; background:#fcfaf1; }
+  .naqd .ref { color:#92651a; font-weight:700; font-size:.9rem; }
+  .muzakkira { background:#f7f7fb; padding:1rem; border-right:4px solid #1e3a8a; border-radius:.5rem; white-space:pre-wrap; }
+  .muted { color:#777; }
+  footer { margin-top:2rem; font-size:.75rem; color:#888; border-top:1px solid #ddd; padding-top:.5rem; text-align:center; }
+</style></head><body>
+<h1>${esc(resultTitle)}</h1>
+<div class="meta">المحلل القانوني المصري — ${new Date().toLocaleDateString("ar-EG")}</div>
+<h2>نص المادة</h2>
+<div class="text">${esc(data.text)}</div>
+<h2>الدفوع الشكلية</h2>${list(data.shakly)}
+<h2>الدفوع الموضوعية</h2>${list(data.mawdoo)}
+<h2>الثغرات ونقاط الضعف</h2>${list(data.thaghra)}
+<h2>مبادئ محكمة النقض</h2>
+${data.naqd.length ? data.naqd.map((n) => `<div class="naqd"><div class="ref">${esc(n.ref)}</div><div>${esc(n.text)}</div></div>`).join("") : '<p class="muted">لا توجد.</p>'}
+<h2>مسودة المذكرة</h2>
+<div class="muzakkira">${esc(data.muzakkira || "—")}</div>
+<footer>أداة استرشادية لا تغني عن الرأي القانوني المتخصص.</footer>
+<script>window.onload=()=>{setTimeout(()=>window.print(),300)};</script>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) {
+      alert("يرجى السماح بالنوافذ المنبثقة لتصدير PDF.");
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   };
 
   const showResults = data !== null;
@@ -408,9 +489,14 @@ function LegalApp() {
               <h2 className="font-serif-ar" style={{ fontSize: "1.5rem", fontWeight: 700, color: "#d4af37", margin: 0 }}>
                 {resultTitle}
               </h2>
-              <button className="chip" onClick={exportMemo} style={{ padding: ".5rem 1rem" }}>
-                ⬇ تحميل المذكرة
-              </button>
+              <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+                <button className="chip" onClick={exportMemoTxt} style={{ padding: ".5rem 1rem" }}>
+                  ⬇ تحميل نصي (TXT)
+                </button>
+                <button className="btn-gold" onClick={exportMemoPdf} style={{ padding: ".5rem 1rem", fontSize: ".85rem" }}>
+                  🖨 تصدير PDF
+                </button>
+              </div>
             </div>
 
             <div className="grid-results">
