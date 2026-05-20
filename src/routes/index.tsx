@@ -489,9 +489,14 @@ ${data.naqd.length ? data.naqd.map((n) => `<div class="naqd"><div class="ref">${
               <h2 className="font-serif-ar" style={{ fontSize: "1.5rem", fontWeight: 700, color: "#d4af37", margin: 0 }}>
                 {resultTitle}
               </h2>
-              <button className="chip" onClick={exportMemo} style={{ padding: ".5rem 1rem" }}>
-                ⬇ تحميل المذكرة
-              </button>
+              <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+                <button className="chip" onClick={exportMemoTxt} style={{ padding: ".5rem 1rem" }}>
+                  ⬇ تحميل نصي (TXT)
+                </button>
+                <button className="btn-gold" onClick={exportMemoPdf} style={{ padding: ".5rem 1rem", fontSize: ".85rem" }}>
+                  🖨 تصدير PDF
+                </button>
+              </div>
             </div>
 
             <div className="grid-results">
