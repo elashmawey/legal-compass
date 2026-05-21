@@ -9,7 +9,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "أداة احترافية لتحليل المواد القانونية المصرية واستخراج الدفوع الشكلية والموضوعية والثغرات ومبادئ محكمة النقض وصياغة مسودة مذكرة جاهزة.",
+          "أداة احترافية لتحليل المواد القانونية المصرية واستخراج الدفوع التفصيلية والثغرات التشريعية ومبادئ محكمة النقض والتعليقات الفقهية وصياغة مذكرة جاهزة.",
       },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
     ],
@@ -54,24 +54,132 @@ const PRESET_URLS: Array<{ law: string; url: string; label: string }> = [
   { law: "personal", url: "https://manshurat.org/node/29447", label: "أحوال شخصية" },
 ];
 
-type NaqdItem = { ref: string; text: string };
+const OFFICIAL_SOURCES: Array<{ name: string; url: string; desc: string; color: string }> = [
+  { name: "منشورات قانونية", url: "https://manshurat.org", desc: "نصوص القوانين والتشريعات", color: "#60a5fa" },
+  { name: "وزارة العدل المصرية", url: "https://moj.gov.eg", desc: "البوابة الرسمية للوزارة", color: "#34d399" },
+  { name: "المحكمة الدستورية العليا", url: "https://www.sccourt.gov.eg", desc: "الأحكام والمبادئ الدستورية", color: "#f472b6" },
+  { name: "الجريدة الرسمية", url: "https://www.idsc.gov.eg", desc: "نشر التشريعات", color: "#fbbf24" },
+  { name: "بوابة التشريعات المصرية", url: "https://www.egypt.gov.eg", desc: "البوابة الحكومية", color: "#a78bfa" },
+  { name: "مكتبة النقض", url: "https://www.cc.gov.eg", desc: "أحكام محكمة النقض", color: "#fb7185" },
+];
+
+type ShaklyItem = {
+  title: string;
+  basis: string;
+  conditions: string;
+  discretion: string;
+  effect: string;
+  naqd_position: string;
+};
+type MawdooItem = {
+  title: string;
+  missing_element: string;
+  evidence: string;
+  opponent_response: string;
+  suggested_wording: string;
+};
+type ThaghraItem = { title: string; description: string; proposed_amendment: string };
+type NaqdItem = { ref: string; text: string; source?: string };
+type Ta3liqItem = { title: string; content: string; category?: string };
+
 type AnalysisData = {
   text: string;
-  shakly: string[];
-  mawdoo: string[];
-  thaghra: string[];
+  shakly: ShaklyItem[];
+  mawdoo: MawdooItem[];
+  thaghra: ThaghraItem[];
   naqd: NaqdItem[];
+  ta3liqat: Ta3liqItem[];
   muzakkira: string;
 };
 
-const EMPTY_ANALYSIS = (law: string, num: string): AnalysisData => ({
-  text: `لم يتم العثور على المادة ${num} من ${LAW_NAMES[law]} في قاعدة البيانات المحلية. سيتم محاولة جلبها من المصدر الرسمي وتحليلها بالذكاء الاصطناعي.`,
+const EMPTY: AnalysisData = {
+  text: "",
   shakly: [],
   mawdoo: [],
   thaghra: [],
   naqd: [],
+  ta3liqat: [],
   muzakkira: "",
-});
+};
+
+// --- normalizers ---------------------------------------------------------
+const toStr = (x: unknown): string => {
+  if (x == null) return "";
+  if (typeof x === "string") return x;
+  if (typeof x === "object") {
+    const o = x as Record<string, unknown>;
+    return String(o.text ?? o.value ?? o.title ?? o.content ?? JSON.stringify(o));
+  }
+  return String(x);
+};
+const obj = (x: unknown): Record<string, unknown> =>
+  x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+
+function normShakly(v: unknown): ShaklyItem[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((it) => {
+    if (typeof it === "string") return { title: it, basis: "", conditions: "", discretion: "", effect: "", naqd_position: "" };
+    const o = obj(it);
+    return {
+      title: toStr(o.title ?? o.name ?? o.heading ?? "دفع شكلي"),
+      basis: toStr(o.basis ?? o.legal_basis ?? o.foundation),
+      conditions: toStr(o.conditions ?? o.requirements),
+      discretion: toStr(o.discretion ?? o.court_discretion),
+      effect: toStr(o.effect ?? o.consequence ?? o.result),
+      naqd_position: toStr(o.naqd_position ?? o.naqd ?? o.cassation),
+    };
+  }).filter((x) => x.title.trim().length > 0);
+}
+function normMawdoo(v: unknown): MawdooItem[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((it) => {
+    if (typeof it === "string") return { title: it, missing_element: "", evidence: "", opponent_response: "", suggested_wording: "" };
+    const o = obj(it);
+    return {
+      title: toStr(o.title ?? o.name ?? "دفع موضوعي"),
+      missing_element: toStr(o.missing_element ?? o.element),
+      evidence: toStr(o.evidence ?? o.proof),
+      opponent_response: toStr(o.opponent_response ?? o.response),
+      suggested_wording: toStr(o.suggested_wording ?? o.wording ?? o.draft),
+    };
+  }).filter((x) => x.title.trim().length > 0);
+}
+function normThaghra(v: unknown): ThaghraItem[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((it) => {
+    if (typeof it === "string") return { title: it, description: "", proposed_amendment: "" };
+    const o = obj(it);
+    return {
+      title: toStr(o.title ?? o.name ?? "ثغرة"),
+      description: toStr(o.description ?? o.content ?? o.text),
+      proposed_amendment: toStr(o.proposed_amendment ?? o.amendment ?? o.proposal ?? o.suggestion),
+    };
+  }).filter((x) => x.title.trim().length > 0 || x.description.trim().length > 0);
+}
+function normNaqd(v: unknown): NaqdItem[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((it) => {
+    if (typeof it === "string") return { ref: "مبدأ مستقر - محكمة النقض المصرية", text: it };
+    const o = obj(it);
+    return {
+      ref: toStr(o.ref ?? o.reference ?? o.source ?? "مبدأ مستقر - محكمة النقض المصرية").trim(),
+      text: toStr(o.text ?? o.principle ?? o.content).trim(),
+      source: toStr(o.source_link ?? o.url ?? o.link ?? "").trim() || undefined,
+    };
+  }).filter((n) => n.text.length > 0);
+}
+function normTa3liqat(v: unknown): Ta3liqItem[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((it) => {
+    if (typeof it === "string") return { title: "تعليق", content: it };
+    const o = obj(it);
+    return {
+      title: toStr(o.title ?? o.heading ?? "تعليق"),
+      content: toStr(o.content ?? o.text ?? o.body),
+      category: toStr(o.category ?? o.type ?? "") || undefined,
+    };
+  }).filter((x) => x.content.trim().length > 0);
+}
 
 function LegalApp() {
   const [law, setLaw] = useState("penal");
@@ -83,7 +191,6 @@ function LegalApp() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState("جارٍ تحميل إحصاءات قاعدة البيانات...");
 
-  // Admin panel
   const [adminOpen, setAdminOpen] = useState(false);
   const [ingestToken, setIngestToken] = useState("");
   const [ingestLaw, setIngestLaw] = useState("penal");
@@ -103,18 +210,14 @@ function LegalApp() {
         setDbStatus("قاعدة البيانات فارغة. افتح لوحة الإدارة لاستيراد القوانين.");
         return;
       }
-      const parts = Object.entries(counts).map(
-        ([k, v]) => `${LAW_LABEL_SHORT[k] || k}: ${v}`,
-      );
+      const parts = Object.entries(counts).map(([k, v]) => `${LAW_LABEL_SHORT[k] || k}: ${v}`);
       setDbStatus(`📚 محفوظ: ${total} مادة (${parts.join(" • ")})`);
     } catch {
       setDbStatus("⚠️ تعذّر الاتصال بالخادم.");
     }
   };
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  useEffect(() => { loadStats(); }, []);
 
   const analyze = async (lawArg?: string, numArg?: string) => {
     const lw = lawArg ?? law;
@@ -125,20 +228,10 @@ function LegalApp() {
     setAiError(null);
     setLoadingArticle(true);
     setLoadingAi(true);
-    setData({
-      text: "جارٍ التحميل من قاعدة البيانات...",
-      shakly: [],
-      mawdoo: [],
-      thaghra: [],
-      naqd: [],
-      muzakkira: "",
-    });
+    setData({ ...EMPTY, text: "جارٍ التحميل من قاعدة البيانات..." });
 
-    setTimeout(() => {
-      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
+    setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
 
-    // 1) Official text
     let liveText: string | null = null;
     try {
       const res = await fetch(
@@ -148,21 +241,19 @@ function LegalApp() {
         const j = (await res.json()) as { found?: boolean; article_text?: string };
         if (j.found && j.article_text) liveText = j.article_text;
       }
-    } catch {
-      /* offline */
-    }
+    } catch { /* noop */ }
 
-    const base = EMPTY_ANALYSIS(lw, nm);
-    if (liveText) base.text = liveText;
-    setData({ ...base });
+    const baseText =
+      liveText ||
+      `لم يتم العثور على المادة ${nm} من ${LAW_NAMES[lw]} في قاعدة البيانات المحلية. سيتم التحليل بناءً على المعرفة العامة.`;
+    setData({ ...EMPTY, text: baseText });
     setLoadingArticle(false);
 
-    // 2) AI
     try {
       const aiRes = await fetch("/api/public/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ law: lw, num: nm, text: liveText || base.text }),
+        body: JSON.stringify({ law: lw, num: nm, text: liveText || baseText }),
       });
       const aj = await aiRes.json();
       if (!aiRes.ok || !aj.ok) {
@@ -170,34 +261,13 @@ function LegalApp() {
         setLoadingAi(false);
         return;
       }
-      const toStr = (x: unknown): string => {
-        if (typeof x === "string") return x;
-        if (x && typeof x === "object") {
-          const o = x as Record<string, unknown>;
-          return String(o.text ?? o.value ?? o.title ?? o.content ?? JSON.stringify(o));
-        }
-        return String(x ?? "");
-      };
-      const arr = (v: unknown): string[] =>
-        Array.isArray(v) ? v.map(toStr).map((s) => s.trim()).filter((s) => s.length > 0) : [];
-      const naqdArr: NaqdItem[] = Array.isArray(aj.naqd)
-        ? aj.naqd
-            .map((n: unknown): NaqdItem => {
-              if (typeof n === "string") return { ref: "مبدأ مستقر - محكمة النقض المصرية", text: n };
-              const o = (n || {}) as Record<string, unknown>;
-              return {
-                ref: String(o.ref ?? o.reference ?? o.source ?? "مبدأ مستقر - محكمة النقض المصرية").trim(),
-                text: String(o.text ?? o.principle ?? o.content ?? "").trim(),
-              };
-            })
-            .filter((n: NaqdItem) => n.text.length > 0)
-        : [];
       setData({
-        text: liveText || base.text,
-        shakly: arr(aj.shakly),
-        mawdoo: arr(aj.mawdoo),
-        thaghra: arr(aj.thaghra),
-        naqd: naqdArr,
+        text: baseText,
+        shakly: normShakly(aj.shakly),
+        mawdoo: normMawdoo(aj.mawdoo),
+        thaghra: normThaghra(aj.thaghra),
+        naqd: normNaqd(aj.naqd),
+        ta3liqat: normTa3liqat(aj.ta3liqat ?? aj.comments ?? aj.commentary),
         muzakkira: toStr(aj.muzakkira),
       });
     } catch (e) {
@@ -208,12 +278,9 @@ function LegalApp() {
   };
 
   const runIngest = async () => {
-    if (!ingestToken || !ingestUrl) {
-      setIngestResult("يلزم إدخال الرمز والرابط.");
-      return;
-    }
+    if (!ingestToken || !ingestUrl) { setIngestResult("يلزم إدخال الرمز والرابط."); return; }
     setIngestBusy(true);
-    setIngestResult("⏳ جارٍ الكشط من المصدر وتحليل النصوص... قد يستغرق 30-90 ثانية.");
+    setIngestResult("⏳ جارٍ الكشط من المصدر... قد يستغرق 30-90 ثانية.");
     try {
       const res = await fetch("/api/public/ingest-law", {
         method: "POST",
@@ -235,42 +302,51 @@ function LegalApp() {
     }
   };
 
-  const buildMemoText = () => {
+  // --- exporters ---------------------------------------------------------
+  const memoText = useMemo(() => {
     if (!data) return "";
+    const sh = data.shakly.length
+      ? data.shakly.map((s, i) =>
+        `${i + 1}. ${s.title}\n   • الأساس القانوني: ${s.basis}\n   • شروط الإثارة: ${s.conditions}\n   • السلطة التقديرية: ${s.discretion}\n   • الأثر المترتب: ${s.effect}\n   • موقف النقض: ${s.naqd_position}`,
+      ).join("\n\n")
+      : "لا توجد.";
+    const mw = data.mawdoo.length
+      ? data.mawdoo.map((s, i) =>
+        `${i + 1}. ${s.title}\n   • الركن المنتفي: ${s.missing_element}\n   • الأدلة المطلوبة: ${s.evidence}\n   • الرد على الخصم: ${s.opponent_response}\n   • الصياغة المقترحة: ${s.suggested_wording}`,
+      ).join("\n\n")
+      : "لا توجد.";
+    const th = data.thaghra.length
+      ? data.thaghra.map((t, i) =>
+        `${i + 1}. ${t.title}\n   ${t.description}\n   ◈ اقتراح تعديل: ${t.proposed_amendment}`,
+      ).join("\n\n")
+      : "لا توجد.";
+    const nq = data.naqd.length
+      ? data.naqd.map((n) => `— ${n.ref}\n  ${n.text}`).join("\n\n")
+      : "لا توجد.";
+    const tl = data.ta3liqat.length
+      ? data.ta3liqat.map((t, i) => `${i + 1}. ${t.title}${t.category ? ` [${t.category}]` : ""}\n   ${t.content}`).join("\n\n")
+      : "لا توجد.";
     return [
       "المحلل القانوني المصري",
-      "=========================",
+      "===========================================",
       resultTitle,
       `تاريخ الإصدار: ${new Date().toLocaleDateString("ar-EG")}`,
       "",
-      "[نص المادة]",
-      data.text,
-      "",
-      "[الدفوع الشكلية]",
-      ...(data.shakly.length ? data.shakly.map((s) => "• " + s) : ["لا توجد."]),
-      "",
-      "[الدفوع الموضوعية]",
-      ...(data.mawdoo.length ? data.mawdoo.map((s) => "• " + s) : ["لا توجد."]),
-      "",
-      "[الثغرات ونقاط الضعف]",
-      ...(data.thaghra.length ? data.thaghra.map((s) => "• " + s) : ["لا توجد."]),
-      "",
-      "[مبادئ محكمة النقض]",
-      ...(data.naqd.length
-        ? data.naqd.flatMap((n) => [`— ${n.ref}`, `  ${n.text}`, ""])
-        : ["لا توجد."]),
-      "",
-      "[مسودة المذكرة]",
-      data.muzakkira || "—",
-      "",
+      "[نص المادة]", data.text, "",
+      "[الدفوع الشكلية التفصيلية]", sh, "",
+      "[الدفوع الموضوعية التفصيلية]", mw, "",
+      "[الثغرات التشريعية واقتراحات التعديل]", th, "",
+      "[مبادئ محكمة النقض]", nq, "",
+      "[تعليقات فقهية أكاديمية]", tl, "",
+      "[مسودة المذكرة]", data.muzakkira || "—", "",
       "—",
       "أداة استرشادية لا تغني عن الرأي القانوني المتخصص.",
     ].join("\n");
-  };
+  }, [data, resultTitle]);
 
   const exportMemoTxt = () => {
     if (!data) return;
-    const blob = new Blob([buildMemoText()], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([memoText], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${resultTitle}.txt`;
@@ -279,115 +355,102 @@ function LegalApp() {
 
   const exportMemoPdf = () => {
     if (!data) return;
-    const esc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const list = (items: string[]) =>
-      items.length
-        ? `<ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`
-        : `<p class="muted">لا توجد.</p>`;
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+    const block = (label: string, val: string) =>
+      val ? `<div class="row"><span class="lbl">${esc(label)}:</span> ${esc(val)}</div>` : "";
+    const shHtml = data.shakly.length
+      ? data.shakly.map((s, i) => `<div class="item">
+          <div class="t">${i + 1}. ${esc(s.title)}</div>
+          ${block("الأساس القانوني", s.basis)}
+          ${block("شروط الإثارة", s.conditions)}
+          ${block("السلطة التقديرية", s.discretion)}
+          ${block("الأثر المترتب", s.effect)}
+          ${block("موقف النقض", s.naqd_position)}
+        </div>`).join("")
+      : '<p class="muted">لا توجد.</p>';
+    const mwHtml = data.mawdoo.length
+      ? data.mawdoo.map((s, i) => `<div class="item">
+          <div class="t">${i + 1}. ${esc(s.title)}</div>
+          ${block("الركن المنتفي", s.missing_element)}
+          ${block("الأدلة المطلوبة", s.evidence)}
+          ${block("الرد على الخصم", s.opponent_response)}
+          ${block("الصياغة المقترحة", s.suggested_wording)}
+        </div>`).join("")
+      : '<p class="muted">لا توجد.</p>';
+    const thHtml = data.thaghra.length
+      ? data.thaghra.map((t, i) => `<div class="item">
+          <div class="t">${i + 1}. ${esc(t.title)}</div>
+          <div>${esc(t.description)}</div>
+          ${t.proposed_amendment ? `<div class="amend"><b>◈ اقتراح التعديل التشريعي:</b><br/>${esc(t.proposed_amendment)}</div>` : ""}
+        </div>`).join("")
+      : '<p class="muted">لا توجد.</p>';
+    const nqHtml = data.naqd.length
+      ? data.naqd.map((n) => `<div class="naqd"><div class="ref">${esc(n.ref)}</div><div>${esc(n.text)}</div></div>`).join("")
+      : '<p class="muted">لا توجد.</p>';
+    const tlHtml = data.ta3liqat.length
+      ? data.ta3liqat.map((t, i) => `<div class="item">
+          <div class="t">${i + 1}. ${esc(t.title)}${t.category ? ` <span class="cat">[${esc(t.category)}]</span>` : ""}</div>
+          <div>${esc(t.content)}</div>
+        </div>`).join("")
+      : '<p class="muted">لا توجد.</p>';
+
     const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
 <title>${esc(resultTitle)}</title>
 <style>
-  @page { size: A4; margin: 18mm; }
-  body { font-family: 'Tajawal','Segoe UI',Tahoma,sans-serif; color:#111; line-height:1.8; }
+  @page { size: A4; margin: 16mm; }
+  body { font-family: 'Tajawal','Segoe UI',Tahoma,sans-serif; color:#111; line-height:1.75; font-size:11pt; }
   h1 { color:#1e3a8a; border-bottom:2px solid #d4af37; padding-bottom:.25rem; }
   h2 { color:#1e3a8a; margin-top:1.4rem; border-right:4px solid #d4af37; padding-right:.5rem; }
-  .meta { color:#555; font-size:.85rem; margin-bottom:1rem; }
+  .meta { color:#555; font-size:.8rem; margin-bottom:1rem; }
   .text { background:#faf7ee; border:1px solid #e6dcb8; padding:1rem; border-radius:.5rem; }
-  ul { padding-right:1.25rem; }
-  li { margin:.25rem 0; }
-  .naqd { border-right:3px solid #d4af37; padding:.4rem .75rem; margin:.5rem 0; background:#fcfaf1; }
+  .item { border:1px solid #ddd; border-radius:.5rem; padding:.75rem; margin:.5rem 0; background:#fafafa; page-break-inside:avoid; }
+  .item .t { font-weight:700; color:#1e3a8a; margin-bottom:.4rem; }
+  .row { margin:.2rem 0; }
+  .row .lbl { color:#92651a; font-weight:700; }
+  .amend { margin-top:.5rem; background:#fff8e1; border-right:4px solid #d4af37; padding:.5rem .75rem; border-radius:.4rem; color:#5b4419; }
+  .naqd { border-right:3px solid #d4af37; padding:.4rem .75rem; margin:.5rem 0; background:#fcfaf1; page-break-inside:avoid; }
   .naqd .ref { color:#92651a; font-weight:700; font-size:.9rem; }
+  .cat { color:#777; font-weight:400; font-size:.8rem; }
   .muzakkira { background:#f7f7fb; padding:1rem; border-right:4px solid #1e3a8a; border-radius:.5rem; white-space:pre-wrap; }
   .muted { color:#777; }
   footer { margin-top:2rem; font-size:.75rem; color:#888; border-top:1px solid #ddd; padding-top:.5rem; text-align:center; }
 </style></head><body>
 <h1>${esc(resultTitle)}</h1>
 <div class="meta">المحلل القانوني المصري — ${new Date().toLocaleDateString("ar-EG")}</div>
-<h2>نص المادة</h2>
-<div class="text">${esc(data.text)}</div>
-<h2>الدفوع الشكلية</h2>${list(data.shakly)}
-<h2>الدفوع الموضوعية</h2>${list(data.mawdoo)}
-<h2>الثغرات ونقاط الضعف</h2>${list(data.thaghra)}
-<h2>مبادئ محكمة النقض</h2>
-${data.naqd.length ? data.naqd.map((n) => `<div class="naqd"><div class="ref">${esc(n.ref)}</div><div>${esc(n.text)}</div></div>`).join("") : '<p class="muted">لا توجد.</p>'}
-<h2>مسودة المذكرة</h2>
-<div class="muzakkira">${esc(data.muzakkira || "—")}</div>
-<footer>أداة استرشادية لا تغني عن الرأي القانوني المتخصص.</footer>
+<h2>نص المادة</h2><div class="text">${esc(data.text)}</div>
+<h2>الدفوع الشكلية التفصيلية</h2>${shHtml}
+<h2>الدفوع الموضوعية التفصيلية</h2>${mwHtml}
+<h2>الثغرات التشريعية</h2>${thHtml}
+<h2>مبادئ محكمة النقض</h2>${nqHtml}
+<h2>تعليقات فقهية أكاديمية</h2>${tlHtml}
+<h2>مسودة المذكرة</h2><div class="muzakkira">${esc(data.muzakkira || "—")}</div>
+<footer>أداة استرشادية لا تغني عن الرأي القانوني المتخصص — ${new Date().getFullYear()}</footer>
 <script>window.onload=()=>{setTimeout(()=>window.print(),300)};</script>
 </body></html>`;
     const w = window.open("", "_blank");
-    if (!w) {
-      alert("يرجى السماح بالنوافذ المنبثقة لتصدير PDF.");
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+    if (!w) { alert("يرجى السماح بالنوافذ المنبثقة لتصدير PDF."); return; }
+    w.document.open(); w.document.write(html); w.document.close();
   };
 
   const showResults = data !== null;
 
   return (
     <div dir="rtl" lang="ar" className="legal-root">
-      <style>{`
-        .legal-root{font-family:'Tajawal',sans-serif;background:radial-gradient(ellipse at top,#16294f 0%,#0a1428 60%);min-height:100vh;color:#f5f5f5}
-        .legal-root .font-serif-ar{font-family:'Amiri',serif}
-        .legal-root .gold-border{border:1px solid rgba(212,175,55,.3)}
-        .legal-root .gold-glow{box-shadow:0 0 30px -10px rgba(212,175,55,.4)}
-        .legal-root .card{background:linear-gradient(145deg,rgba(22,41,79,.7),rgba(15,29,58,.7));backdrop-filter:blur(10px)}
-        .legal-root .card-header{background:linear-gradient(90deg,rgba(212,175,55,.15),transparent);border-bottom:1px solid rgba(212,175,55,.25)}
-        .legal-root select,.legal-root input,.legal-root textarea{background:rgba(10,20,40,.6);color:#fff;border:1px solid rgba(212,175,55,.3);border-radius:.5rem;padding:.6rem .9rem;width:100%;font:inherit}
-        .legal-root select:focus,.legal-root input:focus,.legal-root textarea:focus{outline:none;border-color:#d4af37;box-shadow:0 0 0 3px rgba(212,175,55,.2)}
-        .legal-root .btn-gold{background:linear-gradient(to left,#b8901f,#d4af37);color:#0a1428;font-weight:700;padding:.75rem 1rem;border-radius:.5rem;cursor:pointer;border:0;transition:filter .15s}
-        .legal-root .btn-gold:hover{filter:brightness(1.1)}
-        .legal-root .btn-gold:disabled{opacity:.6;cursor:not-allowed}
-        .legal-root .chip{padding:.25rem .75rem;border-radius:9999px;border:1px solid rgba(212,175,55,.3);font-size:.75rem;cursor:pointer;background:transparent;color:#f5f5f5;transition:background .15s}
-        .legal-root .chip:hover{background:rgba(212,175,55,.1)}
-        .legal-root .badge-shakly{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.4)}
-        .legal-root .badge-mawdoo{background:rgba(168,85,247,.15);color:#d8b4fe;border:1px solid rgba(168,85,247,.4)}
-        .legal-root .badge-thaghra{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.4)}
-        .legal-root .badge-naqd{background:rgba(212,175,55,.15);color:#fcd34d;border:1px solid rgba(212,175,55,.4)}
-        .legal-root .scale-icon{filter:drop-shadow(0 0 8px rgba(212,175,55,.5))}
-        @keyframes legalFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        .legal-root .fade-in{animation:legalFadeIn .4s ease-out}
-        .legal-root a{color:#d4af37}
-        .legal-root .container{max-width:80rem;margin:0 auto;padding:0 1.5rem}
-        .legal-root .grid-12{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:.75rem}
-        .legal-root .grid-results{display:grid;grid-template-columns:1fr;gap:1.25rem}
-        @media (min-width:1024px){.legal-root .grid-results{grid-template-columns:repeat(2,1fr)}.legal-root .col-span-2{grid-column:span 2}}
-        @media (max-width:768px){.legal-root .grid-12 > *{grid-column:span 12 !important}}
-        .legal-root .col-4{grid-column:span 4}
-        .legal-root .col-3{grid-column:span 3}
-        .legal-root .col-5{grid-column:span 5}
-        .legal-root .skeleton{background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,255,255,.12),rgba(255,255,255,.05));background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:.4rem;height:1rem;margin:.4rem 0}
-        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-        .legal-root ul.bullets{list-style:disc;padding-right:1.25rem;margin:0}
-        .legal-root ul.bullets li{margin:.4rem 0;line-height:1.8}
-      `}</style>
+      <style>{styles}</style>
 
       {/* HEADER */}
-      <header
-        style={{
-          borderBottom: "1px solid rgba(212,175,55,.3)",
-          background: "rgba(10,20,40,.8)",
-          backdropFilter: "blur(8px)",
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-        }}
-      >
-        <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.5rem" }}>
+      <header className="lg-header">
+        <div className="container lg-header-inner">
           <div style={{ display: "flex", alignItems: "center", gap: ".75rem" }}>
             <svg className="scale-icon" width="40" height="40" viewBox="0 0 24 24" fill="#d4af37">
-              <path d="M12 2L9 6h2v3H4v2h2.5l-3 7c0 1.66 2.01 3 4.5 3s4.5-1.34 4.5-3l-3-7H11V11h7v-2h-7V6h2l-1-4zM5.5 18l1.5-3.5L8.5 18h-3zm10 0l1.5-3.5L18.5 18h-3zm5.5-7h-2.5l3 7c0 1.66-2.01 3-4.5 3s-4.5-1.34-4.5-3l3-7" />
+              <path d="M12 2L9 6h2v3H4v2h2.5l-3 7c0 1.66 2.01 3 4.5 3s4.5-1.34 4.5-3l-3-7H11V11h7v-2h-7V6h2l-1-4zM5.5 18l1.5-3.5L8.5 18h-3zm10 0l1.5-3.5L18.5 18h-3z" />
             </svg>
             <div>
               <h1 className="font-serif-ar" style={{ fontSize: "1.4rem", fontWeight: 700, color: "#d4af37", margin: 0 }}>
                 المحلل القانوني المصري
               </h1>
               <p style={{ fontSize: ".75rem", color: "#9ca3af", margin: 0 }}>
-                منصة استخراج الدفوع والثغرات وأحكام النقض
+                منصة الدفوع التفصيلية وأحكام النقض والتعليقات الفقهية
               </p>
             </div>
           </div>
@@ -396,44 +459,31 @@ ${data.naqd.length ? data.naqd.map((n) => `<div class="naqd"><div class="ref">${
       </header>
 
       <main className="container" style={{ padding: "2rem 1.5rem" }}>
-        {/* SEARCH PANEL */}
+        {/* SEARCH */}
         <section className="card gold-border gold-glow" style={{ borderRadius: "1rem", padding: "1.5rem", marginBottom: "2rem" }}>
-          <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#d4af37", marginBottom: "1rem" }}>
-            🔍 محرك البحث القانوني
-          </h2>
+          <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#d4af37", marginBottom: "1rem" }}>🔍 محرك البحث القانوني</h2>
           <div className="grid-12">
             <div className="col-4">
-              <label style={{ fontSize: ".85rem", color: "#d1d5db", display: "block", marginBottom: ".25rem" }}>فرع القانون</label>
+              <label className="lbl-form">فرع القانون</label>
               <select value={law} onChange={(e) => setLaw(e.target.value)}>
-                {Object.entries(LAW_NAMES).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
+                {Object.entries(LAW_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div className="col-4">
-              <label style={{ fontSize: ".85rem", color: "#d1d5db", display: "block", marginBottom: ".25rem" }}>رقم المادة</label>
-              <input
-                type="text"
-                placeholder="مثال: 304 أو 17"
-                value={num}
+              <label className="lbl-form">رقم المادة</label>
+              <input type="text" placeholder="مثال: 304 أو 17" value={num}
                 onChange={(e) => setNum(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") analyze(); }}
-              />
+                onKeyDown={(e) => { if (e.key === "Enter") analyze(); }} />
             </div>
             <div className="col-4" style={{ display: "flex", alignItems: "flex-end" }}>
-              <button className="btn-gold gold-glow" style={{ width: "100%" }} onClick={() => analyze()}>
-                تحليل المادة
-              </button>
+              <button className="btn-gold gold-glow" style={{ width: "100%" }} onClick={() => analyze()}>تحليل المادة</button>
             </div>
           </div>
           <div style={{ marginTop: "1rem", display: "flex", flexWrap: "wrap", gap: ".5rem", alignItems: "center" }}>
             <span style={{ fontSize: ".75rem", color: "#9ca3af" }}>أمثلة سريعة:</span>
             {QUICK_EXAMPLES.map((q) => (
-              <button
-                key={q.label}
-                className="chip"
-                onClick={() => { setLaw(q.law); setNum(q.art); analyze(q.law, q.art); }}
-              >
+              <button key={q.label} className="chip"
+                onClick={() => { setLaw(q.law); setNum(q.art); analyze(q.law, q.art); }}>
                 {q.label}
               </button>
             ))}
@@ -441,40 +491,30 @@ ${data.naqd.length ? data.naqd.map((n) => `<div class="naqd"><div class="ref">${
           <div style={{ marginTop: ".75rem", fontSize: ".75rem", color: "#9ca3af" }}>{dbStatus}</div>
         </section>
 
-        {/* ADMIN PANEL */}
+        {/* ADMIN */}
         <section className="card gold-border" style={{ borderRadius: "1rem", padding: "1.5rem", marginBottom: "2rem" }}>
-          <button
-            onClick={() => setAdminOpen((v) => !v)}
-            style={{ background: "transparent", border: 0, color: "#d4af37", fontWeight: 700, cursor: "pointer", fontSize: "1rem" }}
-          >
+          <button onClick={() => setAdminOpen((v) => !v)}
+            style={{ background: "transparent", border: 0, color: "#d4af37", fontWeight: 700, cursor: "pointer", fontSize: "1rem" }}>
             ⚙️ لوحة الإدارة - استيراد قانون كامل (Firecrawl) {adminOpen ? "▲" : "▼"}
           </button>
           {adminOpen && (
             <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: ".75rem", fontSize: ".9rem" }}>
               <p style={{ color: "#d1d5db", lineHeight: 1.8, margin: 0 }}>
-                أدخل رمز الاستيراد السرّي (INGEST_TOKEN) ثم اختر القانون. سيتم جلب نصوصه كاملة من المصدر الرسمي وتخزينها في قاعدة بيانات Lovable Cloud.
+                أدخل رمز الاستيراد السرّي (INGEST_TOKEN) ثم اختر القانون.
               </p>
               <div className="grid-12">
                 <input className="col-4" type="password" placeholder="رمز الاستيراد السرّي" value={ingestToken} onChange={(e) => setIngestToken(e.target.value)} />
                 <select className="col-3" value={ingestLaw} onChange={(e) => setIngestLaw(e.target.value)}>
-                  {Object.entries(LAW_NAMES).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
+                  {Object.entries(LAW_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
                 <input className="col-5" type="url" placeholder="رابط المصدر" value={ingestUrl} onChange={(e) => setIngestUrl(e.target.value)} />
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem" }}>
                 {PRESET_URLS.map((p) => (
-                  <button key={p.label} className="chip" onClick={() => { setIngestLaw(p.law); setIngestUrl(p.url); }}>
-                    {p.label}
-                  </button>
+                  <button key={p.label} className="chip" onClick={() => { setIngestLaw(p.law); setIngestUrl(p.url); }}>{p.label}</button>
                 ))}
               </div>
-              <div>
-                <button className="btn-gold" disabled={ingestBusy} onClick={runIngest}>
-                  {ingestBusy ? "جارٍ الاستيراد..." : "بدء الاستيراد"}
-                </button>
-              </div>
+              <div><button className="btn-gold" disabled={ingestBusy} onClick={runIngest}>{ingestBusy ? "جارٍ الاستيراد..." : "بدء الاستيراد"}</button></div>
               {ingestResult && (
                 <pre style={{ color: "#d1d5db", whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0 }}>{ingestResult}</pre>
               )}
@@ -485,174 +525,225 @@ ${data.naqd.length ? data.naqd.map((n) => `<div class="naqd"><div class="ref">${
         {/* RESULTS */}
         {showResults ? (
           <section ref={resultsRef}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: ".5rem" }}>
-              <h2 className="font-serif-ar" style={{ fontSize: "1.5rem", fontWeight: 700, color: "#d4af37", margin: 0 }}>
-                {resultTitle}
-              </h2>
+            <div className="results-toolbar">
+              <h2 className="font-serif-ar" style={{ fontSize: "1.5rem", fontWeight: 700, color: "#d4af37", margin: 0 }}>{resultTitle}</h2>
               <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
-                <button className="chip" onClick={exportMemoTxt} style={{ padding: ".5rem 1rem" }}>
-                  ⬇ تحميل نصي (TXT)
-                </button>
-                <button className="btn-gold" onClick={exportMemoPdf} style={{ padding: ".5rem 1rem", fontSize: ".85rem" }}>
-                  🖨 تصدير PDF
-                </button>
+                <CopyBtn text={memoText} label="نسخ المذكرة الكاملة" />
+                <button className="chip" onClick={exportMemoTxt} style={{ padding: ".5rem 1rem" }}>⬇ تحميل نصي (TXT)</button>
+                <button className="btn-gold" onClick={exportMemoPdf} style={{ padding: ".5rem 1rem", fontSize: ".85rem" }}>🖨 تصدير PDF</button>
               </div>
             </div>
 
             <div className="grid-results">
-              <ResultCard title="📜 نص المادة" titleColor="#d4af37" className="col-span-2" serif large>
+              {/* نص المادة */}
+              <ResultCard title="📜 نص المادة" titleColor="#d4af37" className="col-span-2" copyText={data!.text} serif large>
                 {loadingArticle ? <Skeletons n={3} /> : <span>{data!.text}</span>}
               </ResultCard>
 
-              <ResultCard title="الدفوع الشكلية" badge="شكلية" badgeClass="badge-shakly" titleColor="#93c5fd">
-                <BulletList items={data!.shakly} loading={loadingAi} error={aiError} />
+              {/* شكلية */}
+              <ResultCard title="الدفوع الشكلية التفصيلية" badge="شكلية" badgeClass="badge-shakly" titleColor="#93c5fd"
+                copyText={data!.shakly.map((s, i) => `${i + 1}. ${s.title}\n  - الأساس: ${s.basis}\n  - الشروط: ${s.conditions}\n  - السلطة: ${s.discretion}\n  - الأثر: ${s.effect}\n  - النقض: ${s.naqd_position}`).join("\n\n")}>
+                {loadingAi ? <Skeletons n={5} /> : aiError ? <ErrMsg msg={aiError} /> :
+                  data!.shakly.length === 0 ? <EmptyMsg /> : (
+                    <div className="stack">
+                      {data!.shakly.map((s, i) => (
+                        <div key={i} className="defense-item defense-shakly">
+                          <div className="defense-title">{i + 1}. {s.title}</div>
+                          <DField label="الأساس القانوني" value={s.basis} />
+                          <DField label="شروط الإثارة" value={s.conditions} />
+                          <DField label="السلطة التقديرية" value={s.discretion} />
+                          <DField label="الأثر المترتب" value={s.effect} />
+                          <DField label="موقف محكمة النقض" value={s.naqd_position} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </ResultCard>
 
-              <ResultCard title="الدفوع الموضوعية" badge="موضوعية" badgeClass="badge-mawdoo" titleColor="#d8b4fe">
-                <BulletList items={data!.mawdoo} loading={loadingAi} error={aiError} />
+              {/* موضوعية */}
+              <ResultCard title="الدفوع الموضوعية التفصيلية" badge="موضوعية" badgeClass="badge-mawdoo" titleColor="#d8b4fe"
+                copyText={data!.mawdoo.map((s, i) => `${i + 1}. ${s.title}\n  - الركن المنتفي: ${s.missing_element}\n  - الأدلة: ${s.evidence}\n  - رد الخصم: ${s.opponent_response}\n  - الصياغة: ${s.suggested_wording}`).join("\n\n")}>
+                {loadingAi ? <Skeletons n={5} /> : aiError ? <ErrMsg msg={aiError} /> :
+                  data!.mawdoo.length === 0 ? <EmptyMsg /> : (
+                    <div className="stack">
+                      {data!.mawdoo.map((s, i) => (
+                        <div key={i} className="defense-item defense-mawdoo">
+                          <div className="defense-title">{i + 1}. {s.title}</div>
+                          <DField label="الركن المنتفي" value={s.missing_element} />
+                          <DField label="الأدلة المطلوبة" value={s.evidence} />
+                          <DField label="الرد على الخصم" value={s.opponent_response} />
+                          <DField label="الصياغة المقترحة" value={s.suggested_wording} highlight />
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </ResultCard>
 
-              <ResultCard title="الثغرات ونقاط الضعف" badge="ثغرات" badgeClass="badge-thaghra" titleColor="#fca5a5">
-                <BulletList items={data!.thaghra} loading={loadingAi} error={aiError} />
+              {/* ثغرات */}
+              <ResultCard title="الثغرات التشريعية ونقاط الضعف" badge="ثغرات" badgeClass="badge-thaghra" titleColor="#fca5a5" className="col-span-2"
+                copyText={data!.thaghra.map((t, i) => `${i + 1}. ${t.title}\n${t.description}\n◈ اقتراح: ${t.proposed_amendment}`).join("\n\n")}>
+                {loadingAi ? <Skeletons n={4} /> : aiError ? <ErrMsg msg={aiError} /> :
+                  data!.thaghra.length === 0 ? <EmptyMsg /> : (
+                    <div className="stack">
+                      {data!.thaghra.map((t, i) => (
+                        <div key={i} className="defense-item defense-thaghra">
+                          <div className="defense-title" style={{ color: "#fca5a5" }}>{i + 1}. {t.title}</div>
+                          <div style={{ marginBottom: ".5rem" }}>{t.description}</div>
+                          {t.proposed_amendment && (
+                            <div className="amend-box">
+                              <div className="amend-head">◈ اقتراح التعديل التشريعي</div>
+                              <div>{t.proposed_amendment}</div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </ResultCard>
 
-              <ResultCard title="مبادئ محكمة النقض" badge="نقض" badgeClass="badge-naqd" titleColor="#d4af37">
-                {loadingAi ? (
-                  <Skeletons n={3} />
-                ) : aiError ? (
-                  <p style={{ color: "#fca5a5" }}>⚠️ {aiError}</p>
-                ) : data!.naqd.length === 0 ? (
-                  <p style={{ color: "#9ca3af" }}>لا توجد مبادئ نقض متاحة.</p>
-                ) : (
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: ".75rem" }}>
-                    {data!.naqd.map((n, i) => (
-                      <li key={i} style={{ borderRight: "3px solid #d4af37", paddingRight: ".75rem" }}>
-                        <div style={{ color: "#fcd34d", fontWeight: 700, fontSize: ".85rem", marginBottom: ".25rem" }}>{n.ref}</div>
-                        <div style={{ color: "#e5e7eb", lineHeight: 1.8 }}>{n.text}</div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              {/* نقض */}
+              <ResultCard title="مبادئ محكمة النقض" badge="نقض" badgeClass="badge-naqd" titleColor="#d4af37"
+                copyText={data!.naqd.map((n) => `${n.ref}\n${n.text}`).join("\n\n")}>
+                {loadingAi ? <Skeletons n={3} /> : aiError ? <ErrMsg msg={aiError} /> :
+                  data!.naqd.length === 0 ? <EmptyMsg label="لا توجد مبادئ نقض." /> : (
+                    <ul className="naqd-list">
+                      {data!.naqd.map((n, i) => (
+                        <li key={i} className="naqd-li">
+                          <div className="naqd-ref">{n.ref}</div>
+                          <div style={{ color: "#e5e7eb", lineHeight: 1.8 }}>{n.text}</div>
+                          {n.source && (
+                            <a href={n.source} target="_blank" rel="noreferrer" className="naqd-src">🔗 المصدر</a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
               </ResultCard>
 
-              <ResultCard title="✍️ مسودة مذكرة قانونية جاهزة للاقتباس" titleColor="#d4af37" className="col-span-2">
-                {loadingAi ? (
-                  <Skeletons n={6} />
-                ) : aiError ? (
-                  <p style={{ color: "#fca5a5" }}>⚠️ {aiError}</p>
-                ) : (
-                  <div
-                    className="font-serif-ar"
-                    style={{
-                      background: "rgba(10,20,40,.4)",
-                      borderRight: "4px solid #d4af37",
-                      padding: "1.25rem",
-                      borderRadius: ".5rem",
-                      lineHeight: 2,
-                      fontSize: "1.05rem",
-                      color: "#f3f4f6",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {data!.muzakkira || "—"}
-                  </div>
+              {/* تعليقات */}
+              <ResultCard title="📚 تعليقات فقهية أكاديمية" badge="فقه" badgeClass="badge-ta3liq" titleColor="#5eead4"
+                copyText={data!.ta3liqat.map((t, i) => `${i + 1}. ${t.title}\n${t.content}`).join("\n\n")}>
+                {loadingAi ? <Skeletons n={4} /> : aiError ? <ErrMsg msg={aiError} /> :
+                  data!.ta3liqat.length === 0 ? <EmptyMsg label="لا توجد تعليقات." /> : (
+                    <div className="stack">
+                      {data!.ta3liqat.map((t, i) => (
+                        <div key={i} className="defense-item defense-ta3liq">
+                          <div className="defense-title" style={{ color: "#5eead4" }}>
+                            {i + 1}. {t.title}
+                            {t.category && <span className="cat-pill">{t.category}</span>}
+                          </div>
+                          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.9 }}>{t.content}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+              </ResultCard>
+
+              {/* مذكرة */}
+              <ResultCard title="✍️ مسودة مذكرة قانونية جاهزة" titleColor="#d4af37" className="col-span-2" copyText={data!.muzakkira}>
+                {loadingAi ? <Skeletons n={6} /> : aiError ? <ErrMsg msg={aiError} /> : (
+                  <div className="font-serif-ar muzakkira-box">{data!.muzakkira || "—"}</div>
                 )}
               </ResultCard>
             </div>
           </section>
         ) : (
           <section style={{ textAlign: "center", padding: "5rem 0" }}>
-            <div
-              style={{
-                display: "inline-flex",
-                padding: "1.5rem",
-                borderRadius: "9999px",
-                background: "rgba(212,175,55,.1)",
-                border: "1px solid rgba(212,175,55,.3)",
-                marginBottom: "1rem",
-              }}
-            >
+            <div className="hero-icon">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="1.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#d4af37", marginBottom: ".5rem" }}>
-              ابدأ بتحليل مادة قانونية
-            </h3>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#d4af37", marginBottom: ".5rem" }}>ابدأ بتحليل مادة قانونية</h3>
             <p style={{ color: "#9ca3af", maxWidth: "32rem", margin: "0 auto", lineHeight: 1.8 }}>
-              اختر فرع القانون وأدخل رقم المادة لاستخراج النص الأصلي، الدفوع الشكلية والموضوعية، الثغرات الإجرائية، ومبادئ النقض مع مسودة مذكرة جاهزة.
+              اختر فرع القانون وأدخل رقم المادة لاستخراج دفوع تفصيلية، ثغرات تشريعية، مبادئ نقض، تعليقات فقهية، ومسودة مذكرة جاهزة.
             </p>
           </section>
         )}
+
+        {/* OFFICIAL SOURCES */}
+        <section className="card gold-border" style={{ borderRadius: "1rem", padding: "1.5rem", marginTop: "2.5rem" }}>
+          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#d4af37", marginBottom: "1rem" }}>
+            🏛️ المصادر الرسمية المصرية
+          </h2>
+          <div className="sources-grid">
+            {OFFICIAL_SOURCES.map((s) => (
+              <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="source-card"
+                style={{ borderRightColor: s.color }}>
+                <div className="source-name" style={{ color: s.color }}>🔗 {s.name}</div>
+                <div className="source-desc">{s.desc}</div>
+              </a>
+            ))}
+          </div>
+        </section>
       </main>
 
-      <footer
-        style={{
-          borderTop: "1px solid rgba(212,175,55,.2)",
-          marginTop: "3rem",
-          padding: "1.5rem",
-          textAlign: "center",
-          fontSize: ".75rem",
-          color: "#6b7280",
-        }}
-      >
-        © 2025 المحلل القانوني المصري — أداة استرشادية لا تغني عن الرأي القانوني المتخصص
+      <footer className="lg-footer">
+        <div className="container">
+          <div className="footer-sources">
+            {OFFICIAL_SOURCES.map((s) => (
+              <a key={s.url} href={s.url} target="_blank" rel="noreferrer" style={{ color: s.color }}>{s.name}</a>
+            ))}
+          </div>
+          <div style={{ marginTop: ".5rem" }}>
+            © 2025 المحلل القانوني المصري — أداة استرشادية لا تغني عن الرأي القانوني المتخصص
+          </div>
+        </div>
       </footer>
     </div>
   );
 }
 
+// ---------- Components ----------
 function ResultCard({
-  title,
-  titleColor,
-  badge,
-  badgeClass,
-  children,
-  className,
-  serif,
-  large,
+  title, titleColor, badge, badgeClass, children, className, serif, large, copyText,
 }: {
-  title: string;
-  titleColor: string;
-  badge?: string;
-  badgeClass?: string;
-  children: React.ReactNode;
-  className?: string;
-  serif?: boolean;
-  large?: boolean;
+  title: string; titleColor: string; badge?: string; badgeClass?: string;
+  children: React.ReactNode; className?: string; serif?: boolean; large?: boolean; copyText?: string;
 }) {
   return (
     <div className={`card gold-border fade-in ${className || ""}`} style={{ borderRadius: ".75rem", overflow: "hidden" }}>
       <div className="card-header" style={{ padding: ".75rem 1.25rem", display: "flex", alignItems: "center", gap: ".5rem" }}>
         {badge && <span className={badgeClass} style={{ fontSize: ".7rem", padding: ".15rem .5rem", borderRadius: ".25rem" }}>{badge}</span>}
-        <h3 style={{ fontWeight: 700, color: titleColor, margin: 0 }}>{title}</h3>
+        <h3 style={{ fontWeight: 700, color: titleColor, margin: 0, flex: 1 }}>{title}</h3>
+        {copyText !== undefined && <CopyBtn text={copyText} compact />}
       </div>
-      <div
-        className={serif ? "font-serif-ar" : ""}
-        style={{
-          padding: "1.25rem",
-          color: "#e5e7eb",
-          lineHeight: large ? 2 : 1.8,
-          fontSize: large ? "1.1rem" : "1rem",
-        }}
-      >
+      <div className={serif ? "font-serif-ar" : ""}
+        style={{ padding: "1.25rem", color: "#e5e7eb", lineHeight: large ? 2 : 1.8, fontSize: large ? "1.1rem" : "1rem" }}>
         {children}
       </div>
     </div>
   );
 }
 
-function BulletList({ items, loading, error }: { items: string[]; loading: boolean; error: string | null }) {
-  if (loading) return <Skeletons n={4} />;
-  if (error) return <p style={{ color: "#fca5a5" }}>⚠️ {error}</p>;
-  if (!items.length) return <p style={{ color: "#9ca3af" }}>لا توجد بيانات.</p>;
+function DField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  if (!value || !value.trim()) return null;
   return (
-    <ul className="bullets">
-      {items.map((s, i) => <li key={i}>{s}</li>)}
-    </ul>
+    <div className={`d-field${highlight ? " d-field-hl" : ""}`}>
+      <span className="d-field-lbl">{label}:</span> <span>{value}</span>
+    </div>
   );
 }
 
+function CopyBtn({ text, label, compact }: { text: string; label?: string; compact?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const onClick = async () => {
+    try {
+      await navigator.clipboard.writeText(text || "");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* noop */ }
+  };
+  return (
+    <button onClick={onClick} className="chip copy-btn" disabled={!text} title="نسخ"
+      style={compact ? { padding: ".2rem .55rem", fontSize: ".7rem" } : { padding: ".5rem 1rem" }}>
+      {copied ? "✓ تم النسخ" : (label || "📋 نسخ")}
+    </button>
+  );
+}
+
+function ErrMsg({ msg }: { msg: string }) { return <p style={{ color: "#fca5a5" }}>⚠️ {msg}</p>; }
+function EmptyMsg({ label }: { label?: string }) { return <p style={{ color: "#9ca3af" }}>{label || "لا توجد بيانات."}</p>; }
 function Skeletons({ n }: { n: number }) {
   return (
     <>
@@ -662,3 +753,73 @@ function Skeletons({ n }: { n: number }) {
     </>
   );
 }
+
+// ---------- Styles ----------
+const styles = `
+.legal-root{font-family:'Tajawal',sans-serif;background:radial-gradient(ellipse at top,#16294f 0%,#0a1428 60%);min-height:100vh;color:#f5f5f5}
+.legal-root .font-serif-ar{font-family:'Amiri',serif}
+.legal-root .gold-border{border:1px solid rgba(212,175,55,.3)}
+.legal-root .gold-glow{box-shadow:0 0 30px -10px rgba(212,175,55,.4)}
+.legal-root .card{background:linear-gradient(145deg,rgba(22,41,79,.7),rgba(15,29,58,.7));backdrop-filter:blur(10px)}
+.legal-root .card-header{background:linear-gradient(90deg,rgba(212,175,55,.15),transparent);border-bottom:1px solid rgba(212,175,55,.25)}
+.legal-root select,.legal-root input,.legal-root textarea{background:rgba(10,20,40,.6);color:#fff;border:1px solid rgba(212,175,55,.3);border-radius:.5rem;padding:.6rem .9rem;width:100%;font:inherit}
+.legal-root select:focus,.legal-root input:focus,.legal-root textarea:focus{outline:none;border-color:#d4af37;box-shadow:0 0 0 3px rgba(212,175,55,.2)}
+.legal-root .lbl-form{font-size:.85rem;color:#d1d5db;display:block;margin-bottom:.25rem}
+.legal-root .btn-gold{background:linear-gradient(to left,#b8901f,#d4af37);color:#0a1428;font-weight:700;padding:.75rem 1rem;border-radius:.5rem;cursor:pointer;border:0;transition:filter .15s}
+.legal-root .btn-gold:hover{filter:brightness(1.1)}
+.legal-root .btn-gold:disabled{opacity:.6;cursor:not-allowed}
+.legal-root .chip{padding:.25rem .75rem;border-radius:9999px;border:1px solid rgba(212,175,55,.3);font-size:.75rem;cursor:pointer;background:transparent;color:#f5f5f5;transition:background .15s}
+.legal-root .chip:hover{background:rgba(212,175,55,.1)}
+.legal-root .chip:disabled{opacity:.5;cursor:not-allowed}
+.legal-root .copy-btn{white-space:nowrap}
+.legal-root .badge-shakly{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.4)}
+.legal-root .badge-mawdoo{background:rgba(168,85,247,.15);color:#d8b4fe;border:1px solid rgba(168,85,247,.4)}
+.legal-root .badge-thaghra{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.4)}
+.legal-root .badge-naqd{background:rgba(212,175,55,.15);color:#fcd34d;border:1px solid rgba(212,175,55,.4)}
+.legal-root .badge-ta3liq{background:rgba(45,212,191,.15);color:#5eead4;border:1px solid rgba(45,212,191,.4)}
+.legal-root .scale-icon{filter:drop-shadow(0 0 8px rgba(212,175,55,.5))}
+@keyframes legalFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.legal-root .fade-in{animation:legalFadeIn .4s ease-out}
+.legal-root a{color:#d4af37}
+.legal-root .container{max-width:80rem;margin:0 auto;padding:0 1.5rem}
+.legal-root .grid-12{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:.75rem}
+.legal-root .grid-results{display:grid;grid-template-columns:1fr;gap:1.25rem}
+@media (min-width:1024px){.legal-root .grid-results{grid-template-columns:repeat(2,1fr)}.legal-root .col-span-2{grid-column:span 2}}
+@media (max-width:768px){.legal-root .grid-12 > *{grid-column:span 12 !important}}
+.legal-root .col-4{grid-column:span 4}
+.legal-root .col-3{grid-column:span 3}
+.legal-root .col-5{grid-column:span 5}
+.legal-root .skeleton{background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,255,255,.12),rgba(255,255,255,.05));background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:.4rem;height:1rem;margin:.4rem 0}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.legal-root .stack{display:flex;flex-direction:column;gap:.85rem}
+.legal-root .defense-item{background:rgba(10,20,40,.5);border:1px solid rgba(212,175,55,.15);border-radius:.6rem;padding:.85rem 1rem}
+.legal-root .defense-shakly{border-right:3px solid #3b82f6}
+.legal-root .defense-mawdoo{border-right:3px solid #a855f7}
+.legal-root .defense-thaghra{border-right:3px solid #ef4444}
+.legal-root .defense-ta3liq{border-right:3px solid #2dd4bf}
+.legal-root .defense-title{font-weight:700;color:#fcd34d;margin-bottom:.5rem;font-size:1.02rem;line-height:1.6}
+.legal-root .d-field{margin:.3rem 0;line-height:1.85;color:#e5e7eb;font-size:.95rem}
+.legal-root .d-field-lbl{color:#fcd34d;font-weight:700;margin-left:.3rem}
+.legal-root .d-field-hl{background:rgba(212,175,55,.08);border-right:2px solid #d4af37;padding:.4rem .6rem;border-radius:.35rem;margin-top:.5rem}
+.legal-root .amend-box{margin-top:.65rem;background:linear-gradient(135deg,rgba(212,175,55,.15),rgba(184,144,31,.1));border:1px solid rgba(212,175,55,.45);border-right:4px solid #d4af37;padding:.75rem 1rem;border-radius:.5rem;color:#fde68a}
+.legal-root .amend-head{color:#d4af37;font-weight:700;margin-bottom:.35rem;font-size:.95rem}
+.legal-root .naqd-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.85rem}
+.legal-root .naqd-li{border-right:3px solid #d4af37;padding-right:.85rem;background:rgba(10,20,40,.4);border-radius:.4rem;padding-top:.5rem;padding-bottom:.5rem}
+.legal-root .naqd-ref{color:#fcd34d;font-weight:700;font-size:.88rem;margin-bottom:.3rem}
+.legal-root .naqd-src{display:inline-block;margin-top:.35rem;font-size:.78rem;color:#93c5fd;text-decoration:underline}
+.legal-root .cat-pill{display:inline-block;margin-right:.5rem;font-size:.7rem;background:rgba(45,212,191,.18);color:#5eead4;padding:.1rem .55rem;border-radius:9999px;font-weight:400;vertical-align:middle}
+.legal-root .muzakkira-box{background:rgba(10,20,40,.4);border-right:4px solid #d4af37;padding:1.25rem;border-radius:.5rem;line-height:2;font-size:1.05rem;color:#f3f4f6;white-space:pre-wrap}
+.legal-root .results-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
+.legal-root .lg-header{border-bottom:1px solid rgba(212,175,55,.3);background:rgba(10,20,40,.8);backdrop-filter:blur(8px);position:sticky;top:0;z-index:50}
+.legal-root .lg-header-inner{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem}
+.legal-root .hero-icon{display:inline-flex;padding:1.5rem;border-radius:9999px;background:rgba(212,175,55,.1);border:1px solid rgba(212,175,55,.3);margin-bottom:1rem}
+.legal-root .sources-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem}
+.legal-root .source-card{display:block;background:rgba(10,20,40,.5);border:1px solid rgba(212,175,55,.2);border-right:4px solid #d4af37;padding:.85rem 1rem;border-radius:.5rem;text-decoration:none;transition:transform .15s,background .15s}
+.legal-root .source-card:hover{transform:translateY(-2px);background:rgba(10,20,40,.75)}
+.legal-root .source-name{font-weight:700;font-size:.95rem;margin-bottom:.25rem}
+.legal-root .source-desc{font-size:.75rem;color:#9ca3af}
+.legal-root .lg-footer{border-top:1px solid rgba(212,175,55,.2);margin-top:3rem;padding:1.5rem;text-align:center;font-size:.78rem;color:#9ca3af}
+.legal-root .footer-sources{display:flex;flex-wrap:wrap;gap:.85rem;justify-content:center}
+.legal-root .footer-sources a{text-decoration:none;font-size:.78rem}
+.legal-root .footer-sources a:hover{text-decoration:underline}
+`;
