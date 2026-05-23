@@ -28,7 +28,8 @@ export const Route = createFileRoute('/api/public/article')({
           .eq('article_number', num)
           .maybeSingle();
         if (error) {
-          return new Response(JSON.stringify({ error: error.message }), {
+          console.error('[article] db error:', error);
+          return new Response(JSON.stringify({ error: 'internal server error' }), {
             status: 500,
             headers: { 'Content-Type': 'application/json', ...CORS },
           });

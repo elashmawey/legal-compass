@@ -101,11 +101,40 @@ const CLASSIFY_SYSTEM = `أنت خبير في التكييف القانوني ل
 
 قدم 3-6 مواد مرتبة من الأكثر انطباقاً، واستند فقط لقانون العقوبات المصري رقم 58 لسنة 1937.`;
 
+const MAX_FACTS_LEN = 4000;
+const MAX_TEXT_LEN = 8000;
+const MAX_NUM_LEN = 32;
+
+// In-memory IP rate limiter (best-effort; per worker instance).
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const rateBuckets = new Map<string, { count: number; reset: number }>();
+
+function rateLimit(ip: string): boolean {
+  const now = Date.now();
+  const b = rateBuckets.get(ip);
+  if (!b || now > b.reset) {
+    rateBuckets.set(ip, { count: 1, reset: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (b.count >= RATE_LIMIT_MAX) return false;
+  b.count++;
+  return true;
+}
+
 export const Route = createFileRoute('/api/public/analyze')({
   server: {
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
       POST: async ({ request }) => {
+        const ip =
+          request.headers.get('cf-connecting-ip') ||
+          request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+          'unknown';
+        if (!rateLimit(ip)) {
+          return json({ error: 'rate_limit', detail: 'تم تجاوز حد الطلبات. حاول لاحقاً.' }, 429);
+        }
+
         let body: { mode?: string; num?: string; text?: string; facts?: string };
         try {
           body = await request.json();
@@ -114,7 +143,10 @@ export const Route = createFileRoute('/api/public/analyze')({
         }
 
         const apiKey = process.env.LOVABLE_API_KEY;
-        if (!apiKey) return json({ error: 'LOVABLE_API_KEY missing' }, 500);
+        if (!apiKey) {
+          console.error('[analyze] LOVABLE_API_KEY missing');
+          return json({ error: 'internal server error' }, 500);
+        }
 
         const mode = (body.mode || 'article').trim();
         let system = SYSTEM;
@@ -123,12 +155,19 @@ export const Route = createFileRoute('/api/public/analyze')({
         if (mode === 'classify') {
           const facts = (body.facts || '').trim();
           if (!facts) return json({ error: 'facts required' }, 400);
+          if (facts.length > MAX_FACTS_LEN) {
+            return json({ error: 'facts too long', limit: MAX_FACTS_LEN }, 400);
+          }
           system = CLASSIFY_SYSTEM;
           userMsg = `الواقعة:\n${facts}\n\nاستخرج التكييف القانوني والمواد المنطبقة من قانون العقوبات المصري بصيغة JSON المطلوبة.`;
         } else {
           const num = (body.num || '').trim();
           const text = (body.text || '').trim();
           if (!num) return json({ error: 'num required' }, 400);
+          if (num.length > MAX_NUM_LEN) return json({ error: 'num too long' }, 400);
+          if (text.length > MAX_TEXT_LEN) {
+            return json({ error: 'text too long', limit: MAX_TEXT_LEN }, 400);
+          }
           userMsg = `المادة رقم ${num} من قانون العقوبات المصري.\n\nنص المادة:\n${text || '(غير متوفر — استند لمعرفتك العامة بهذه المادة)'}\n\nاستخرج التحليل الجنائي الكامل والتفصيلي بصيغة JSON المطلوبة دون أي تبسيط.`;
         }
 
@@ -149,10 +188,11 @@ export const Route = createFileRoute('/api/public/analyze')({
         });
 
         if (!res.ok) {
-          const t = await res.text();
+          const t = await res.text().catch(() => '');
+          console.error('[analyze] ai gateway error', res.status, t.slice(0, 500));
           if (res.status === 429) return json({ error: 'rate_limit', detail: 'تم تجاوز حد الطلبات. حاول لاحقاً.' }, 429);
-          if (res.status === 402) return json({ error: 'payment_required', detail: 'الرصيد غير كافٍ في AI Gateway.' }, 402);
-          return json({ error: 'ai_failed', status: res.status, detail: t.slice(0, 300) }, 502);
+          if (res.status === 402) return json({ error: 'payment_required', detail: 'الرصيد غير كافٍ.' }, 402);
+          return json({ error: 'ai_failed' }, 502);
         }
         const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
         const content = j.choices?.[0]?.message?.content || '';
@@ -166,7 +206,8 @@ export const Route = createFileRoute('/api/public/analyze')({
           }
         }
         if (!parsed || typeof parsed !== 'object') {
-          return json({ error: 'parse_failed', raw: content.slice(0, 500) }, 502);
+          console.error('[analyze] parse failed:', content.slice(0, 500));
+          return json({ error: 'parse_failed' }, 502);
         }
         return json({ ok: true, ...(parsed as object) });
       },

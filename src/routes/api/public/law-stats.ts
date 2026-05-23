@@ -16,7 +16,8 @@ export const Route = createFileRoute('/api/public/law-stats')({
           .from('legal_articles')
           .select('law_type');
         if (error) {
-          return new Response(JSON.stringify({ error: error.message }), {
+          console.error('[law-stats] db error:', error);
+          return new Response(JSON.stringify({ error: 'internal server error' }), {
             status: 500,
             headers: { 'Content-Type': 'application/json', ...CORS },
           });
