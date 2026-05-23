@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      analysis_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          hit_count: number
+          id: string
+          mode: string
+          result: Json
+          updated_at: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          hit_count?: number
+          id?: string
+          mode: string
+          result: Json
+          updated_at?: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          hit_count?: number
+          id?: string
+          mode?: string
+          result?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       legal_articles: {
         Row: {
           article_number: string
