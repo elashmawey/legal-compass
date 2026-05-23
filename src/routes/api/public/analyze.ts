@@ -1,10 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { supabaseAdmin } from '@/integrations/supabase/client.server';
+import { createHash } from 'crypto';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+function hashFacts(s: string): string {
+  return createHash('sha256').update(s.trim().toLowerCase().replace(/\s+/g, ' ')).digest('hex').slice(0, 32);
+}
+
 
 const SYSTEM = `أنت كبير مستشاري قانون العقوبات المصري، خبير في فقه الجريمة والعقوبة والطعن بالنقض الجنائي. مهمتك تقديم تحليل احترافي تفصيلي لمواد قانون العقوبات المصري رقم 58 لسنة 1937 وتعديلاته.
 
@@ -151,6 +158,7 @@ export const Route = createFileRoute('/api/public/analyze')({
         const mode = (body.mode || 'article').trim();
         let system = SYSTEM;
         let userMsg = '';
+        let cacheKey = '';
 
         if (mode === 'classify') {
           const facts = (body.facts || '').trim();
@@ -160,6 +168,7 @@ export const Route = createFileRoute('/api/public/analyze')({
           }
           system = CLASSIFY_SYSTEM;
           userMsg = `الواقعة:\n${facts}\n\nاستخرج التكييف القانوني والمواد المنطبقة من قانون العقوبات المصري بصيغة JSON المطلوبة.`;
+          cacheKey = hashFacts(facts);
         } else {
           const num = (body.num || '').trim();
           const text = (body.text || '').trim();
@@ -169,6 +178,29 @@ export const Route = createFileRoute('/api/public/analyze')({
             return json({ error: 'text too long', limit: MAX_TEXT_LEN }, 400);
           }
           userMsg = `المادة رقم ${num} من قانون العقوبات المصري.\n\nنص المادة:\n${text || '(غير متوفر — استند لمعرفتك العامة بهذه المادة)'}\n\nاستخرج التحليل الجنائي الكامل والتفصيلي بصيغة JSON المطلوبة دون أي تبسيط.`;
+          cacheKey = num;
+        }
+
+        // --- Cache lookup ---
+        try {
+          const { data: cached } = await supabaseAdmin
+            .from('analysis_cache')
+            .select('result, hit_count')
+            .eq('mode', mode)
+            .eq('cache_key', cacheKey)
+            .maybeSingle();
+          if (cached?.result) {
+            // Increment hit counter (best-effort, fire-and-forget)
+            supabaseAdmin
+              .from('analysis_cache')
+              .update({ hit_count: (cached.hit_count || 0) + 1, updated_at: new Date().toISOString() })
+              .eq('mode', mode)
+              .eq('cache_key', cacheKey)
+              .then(() => {}, (e) => console.error('[analyze] cache hit-count update failed:', e));
+            return json({ ok: true, cached: true, ...(cached.result as object) });
+          }
+        } catch (e) {
+          console.error('[analyze] cache lookup failed:', e);
         }
 
         const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -209,7 +241,21 @@ export const Route = createFileRoute('/api/public/analyze')({
           console.error('[analyze] parse failed:', content.slice(0, 500));
           return json({ error: 'parse_failed' }, 502);
         }
-        return json({ ok: true, ...(parsed as object) });
+
+        // --- Cache write ---
+        try {
+          await supabaseAdmin
+            .from('analysis_cache')
+            .upsert(
+              { mode, cache_key: cacheKey, result: parsed as never, updated_at: new Date().toISOString() },
+              { onConflict: 'mode,cache_key' },
+            );
+        } catch (e) {
+          console.error('[analyze] cache write failed:', e);
+        }
+
+        return json({ ok: true, cached: false, ...(parsed as object) });
+
       },
     },
   },
