@@ -1,10 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { supabaseAdmin } from '@/integrations/supabase/client.server';
+import { createHash } from 'crypto';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+function hashFacts(s: string): string {
+  return createHash('sha256').update(s.trim().toLowerCase().replace(/\s+/g, ' ')).digest('hex').slice(0, 32);
+}
+
 
 const SYSTEM = `أنت كبير مستشاري قانون العقوبات المصري، خبير في فقه الجريمة والعقوبة والطعن بالنقض الجنائي. مهمتك تقديم تحليل احترافي تفصيلي لمواد قانون العقوبات المصري رقم 58 لسنة 1937 وتعديلاته.
 
