@@ -1,25 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+import { getCorsHeaders, corsResponse, jsonResponse } from '@/lib/cors';
 
 export const Route = createFileRoute('/api/public/article')({
   server: {
     handlers: {
-      OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
+      OPTIONS: async ({ request }) => corsResponse(request),
       GET: async ({ request }) => {
         const url = new URL(request.url);
         const law = url.searchParams.get('law');
         const num = url.searchParams.get('num');
         if (!law || !num) {
-          return new Response(JSON.stringify({ error: 'law & num required' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'law & num required' }, 400, request);
         }
         const { data, error } = await supabaseAdmin
           .from('legal_articles')
@@ -29,20 +21,12 @@ export const Route = createFileRoute('/api/public/article')({
           .maybeSingle();
         if (error) {
           console.error('[article] db error:', error);
-          return new Response(JSON.stringify({ error: 'internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'internal server error' }, 500, request);
         }
         if (!data) {
-          return new Response(JSON.stringify({ found: false }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ found: false }, 404, request);
         }
-        return new Response(JSON.stringify({ found: true, ...data }), {
-          headers: { 'Content-Type': 'application/json', ...CORS },
-        });
+        return jsonResponse({ found: true, ...data }, 200, request);
       },
     },
   },

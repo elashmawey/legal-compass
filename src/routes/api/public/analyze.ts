@@ -1,11 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+import { getCorsHeaders, corsResponse, jsonResponse } from '@/lib/cors';
 
 async function hashFacts(s: string): Promise<string> {
   const normalized = s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -154,27 +149,27 @@ function rateLimit(ip: string): boolean {
 export const Route = createFileRoute('/api/public/analyze')({
   server: {
     handlers: {
-      OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
+      OPTIONS: async ({ request }) => corsResponse(request),
       POST: async ({ request }) => {
         const ip =
           request.headers.get('cf-connecting-ip') ||
           request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
           'unknown';
         if (!rateLimit(ip)) {
-          return json({ error: 'rate_limit', detail: 'تم تجاوز حد الطلبات. حاول لاحقاً.' }, 429);
+          return json({ error: 'rate_limit', detail: 'تم تجاوز حد الطلبات. حاول لاحقاً.' }, 429, request);
         }
 
         let body: { mode?: string; law?: string; num?: string; text?: string; facts?: string };
         try {
           body = await request.json();
         } catch {
-          return json({ error: 'invalid json' }, 400);
+          return json({ error: 'invalid json' }, 400, request);
         }
 
         const apiKey = process.env.LOVABLE_API_KEY;
         if (!apiKey) {
           console.error('[analyze] LOVABLE_API_KEY missing');
-          return json({ error: 'internal server error' }, 500);
+          return json({ error: 'internal server error' }, 500, request);
         }
 
         const mode = (body.mode || 'article').trim();
@@ -185,9 +180,9 @@ export const Route = createFileRoute('/api/public/analyze')({
 
         if (mode === 'classify') {
           const facts = (body.facts || '').trim();
-          if (!facts) return json({ error: 'facts required' }, 400);
+          if (!facts) return json({ error: 'facts required' }, 400, request);
           if (facts.length > MAX_FACTS_LEN) {
-            return json({ error: 'facts too long', limit: MAX_FACTS_LEN }, 400);
+            return json({ error: 'facts too long', limit: MAX_FACTS_LEN }, 400, request);
           }
           system = CLASSIFY_SYSTEM;
           userMsg = `الواقعة:\n${facts}\n\nاستخرج التكييف القانوني والمواد المنطبقة من قانون العقوبات المصري بصيغة JSON المطلوبة.`;
@@ -195,10 +190,10 @@ export const Route = createFileRoute('/api/public/analyze')({
         } else {
           const num = (body.num || '').trim();
           const text = (body.text || '').trim();
-          if (!num) return json({ error: 'num required' }, 400);
-          if (num.length > MAX_NUM_LEN) return json({ error: 'num too long' }, 400);
+          if (!num) return json({ error: 'num required' }, 400, request);
+          if (num.length > MAX_NUM_LEN) return json({ error: 'num too long' }, 400, request);
           if (text.length > MAX_TEXT_LEN) {
-            return json({ error: 'text too long', limit: MAX_TEXT_LEN }, 400);
+            return json({ error: 'text too long', limit: MAX_TEXT_LEN }, 400, request);
           }
           const lawName = LAW_NAMES[lawType] || 'القانون المصري';
           userMsg = `المادة رقم ${num} من ${lawName}.\n\nنص المادة:\n${text || '(غير متوفر — استند لمعرفتك العامة بهذه المادة)'}\n\nاستخرج التحليل القانوني الكامل والتفصيلي بصيغة JSON المطلوبة دون أي تبسيط.`;
@@ -220,7 +215,7 @@ export const Route = createFileRoute('/api/public/analyze')({
               .eq('mode', mode)
               .eq('cache_key', cacheKey)
               .then(() => {}, (e) => console.error('[analyze] cache hit-count update failed:', e));
-            return json({ ok: true, cached: true, ...(cached.result as object) });
+            return json({ ok: true, cached: true, ...(cached.result as object) }, 200, request);
           }
         } catch (e) {
           console.error('[analyze] cache lookup failed:', e);
@@ -245,9 +240,9 @@ export const Route = createFileRoute('/api/public/analyze')({
         if (!res.ok) {
           const t = await res.text().catch(() => '');
           console.error('[analyze] ai gateway error', res.status, t.slice(0, 500));
-          if (res.status === 429) return json({ error: 'rate_limit', detail: 'تم تجاوز حد الطلبات. حاول لاحقاً.' }, 429);
-          if (res.status === 402) return json({ error: 'payment_required', detail: 'الرصيد غير كافٍ.' }, 402);
-          return json({ error: 'ai_failed' }, 502);
+          if (res.status === 429) return json({ error: 'rate_limit', detail: 'تم تجاوز حد الطلبات. حاول لاحقاً.' }, 429, request);
+          if (res.status === 402) return json({ error: 'payment_required', detail: 'الرصيد غير كافٍ.' }, 402, request);
+          return json({ error: 'ai_failed' }, 502, request);
         }
         const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
         const content = j.choices?.[0]?.message?.content || '';
@@ -262,7 +257,7 @@ export const Route = createFileRoute('/api/public/analyze')({
         }
         if (!parsed || typeof parsed !== 'object') {
           console.error('[analyze] parse failed:', content.slice(0, 500));
-          return json({ error: 'parse_failed' }, 502);
+          return json({ error: 'parse_failed' }, 502, request);
         }
 
         // --- Cache write ---
@@ -277,15 +272,15 @@ export const Route = createFileRoute('/api/public/analyze')({
           console.error('[analyze] cache write failed:', e);
         }
 
-        return json({ ok: true, cached: false, ...(parsed as object) });
+        return json({ ok: true, cached: false, ...(parsed as object) }, 200, request);
       },
     },
   },
 });
 
-function json(obj: unknown, status = 200): Response {
+function json(obj: unknown, status = 200, request?: Request): Response {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json', ...getCorsHeaders(request) },
   });
 }

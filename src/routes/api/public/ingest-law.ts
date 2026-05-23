@@ -1,11 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-ingest-token',
-};
+import { getCorsHeaders, corsResponse, jsonResponse } from '@/lib/cors';
 
 // Parses Firecrawl markdown of a manshurat.org law page into individual articles.
 // Articles are introduced by a line containing "المادة <number>" (number may include Arabic digits or "مكرراً").
@@ -47,39 +42,27 @@ function normalizeNumber(n: string): string {
 export const Route = createFileRoute('/api/public/ingest-law')({
   server: {
     handlers: {
-      OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
+      OPTIONS: async ({ request }) => corsResponse(request),
       POST: async ({ request }) => {
         const token = request.headers.get('x-ingest-token');
         const expected = process.env.INGEST_TOKEN;
         if (!expected || token !== expected) {
-          return new Response(JSON.stringify({ error: 'unauthorized' }), {
-            status: 401,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'unauthorized' }, 401, request);
         }
         let body: { lawType?: string; sourceUrl?: string };
         try {
           body = await request.json();
         } catch {
-          return new Response(JSON.stringify({ error: 'invalid json' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'invalid json' }, 400, request);
         }
         const lawType = (body.lawType || '').trim();
         const sourceUrl = (body.sourceUrl || '').trim();
         if (!lawType || !sourceUrl) {
-          return new Response(JSON.stringify({ error: 'lawType & sourceUrl required' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'lawType & sourceUrl required' }, 400, request);
         }
         const apiKey = process.env.FIRECRAWL_API_KEY;
         if (!apiKey) {
-          return new Response(JSON.stringify({ error: 'FIRECRAWL_API_KEY missing' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'FIRECRAWL_API_KEY missing' }, 500, request);
         }
 
         // Call Firecrawl v2 scrape
@@ -97,26 +80,17 @@ export const Route = createFileRoute('/api/public/ingest-law')({
         });
         if (!fcRes.ok) {
           const t = await fcRes.text();
-          return new Response(JSON.stringify({ error: 'firecrawl failed', status: fcRes.status, body: t }), {
-            status: 502,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'firecrawl failed', status: fcRes.status, body: t }, 502, request);
         }
         const fc = (await fcRes.json()) as { data?: { markdown?: string }; markdown?: string };
         const markdown = fc.data?.markdown ?? fc.markdown ?? '';
         if (!markdown) {
-          return new Response(JSON.stringify({ error: 'no markdown returned' }), {
-            status: 502,
-            headers: { 'Content-Type': 'application/json', ...CORS },
-          });
+          return jsonResponse({ error: 'no markdown returned' }, 502, request);
         }
 
         const articles = parseArticles(markdown);
         if (articles.length === 0) {
-          return new Response(
-            JSON.stringify({ error: 'no articles parsed', preview: markdown.slice(0, 500) }),
-            { status: 422, headers: { 'Content-Type': 'application/json', ...CORS } },
-          );
+          return jsonResponse({ error: 'no articles parsed', preview: markdown.slice(0, 500) }, 422, request);
         }
 
         // Upsert in batches of 500
@@ -134,18 +108,12 @@ export const Route = createFileRoute('/api/public/ingest-law')({
             .from('legal_articles')
             .upsert(batch, { onConflict: 'law_type,article_number' });
           if (error) {
-            return new Response(
-              JSON.stringify({ error: 'upsert failed', detail: error.message, insertedSoFar: inserted }),
-              { status: 500, headers: { 'Content-Type': 'application/json', ...CORS } },
-            );
+            return jsonResponse({ error: 'upsert failed', detail: error.message, insertedSoFar: inserted }, 500, request);
           }
           inserted += batch.length;
         }
 
-        return new Response(
-          JSON.stringify({ ok: true, lawType, count: inserted, sample: articles.slice(0, 3) }),
-          { headers: { 'Content-Type': 'application/json', ...CORS } },
-        );
+        return jsonResponse({ ok: true, lawType, count: inserted, sample: articles.slice(0, 3) }, 200, request);
       },
     },
   },
