@@ -423,7 +423,7 @@ async function analyze(){
     const aiRes = await fetch('/api/public/analyze', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ law, num, text: liveText || data.text })
+      body: JSON.stringify({ mode: 'article', law, num, text: liveText || data.text })
     });
     const aj = await aiRes.json();
     if (!aiRes.ok || !aj.ok) {
@@ -435,10 +435,17 @@ async function analyze(){
       $('muzakkira').textContent = data.muzakkira;
       return;
     }
-    fill($('shaklyList'), aj.shakly || data.shakly);
-    fill($('mawdooList'), aj.mawdoo || data.mawdoo);
-    fill($('thaghraList'), aj.thaghra || data.thaghra);
-    fillNaqd($('naqdList'), aj.naqd || data.naqd);
+    // AI returns shakly/mawdoo/thaghra as arrays of objects; extract titles for simple display
+    const extractTitles = (arr) => Array.isArray(arr)
+      ? arr.map(it => typeof it === 'string' ? it : (it.title || it.text || JSON.stringify(it)))
+      : [];
+    const naqdItems = Array.isArray(aj.naqd)
+      ? aj.naqd.map(it => typeof it === 'string' ? {ref:'مبدأ مستقر', text:it} : {ref: it.ref||'مبدأ مستقر', text: it.text||''})
+      : data.naqd;
+    fill($('shaklyList'), extractTitles(aj.shakly).length ? extractTitles(aj.shakly) : data.shakly);
+    fill($('mawdooList'), extractTitles(aj.mawdoo).length ? extractTitles(aj.mawdoo) : data.mawdoo);
+    fill($('thaghraList'), extractTitles(aj.thaghra).length ? extractTitles(aj.thaghra) : data.thaghra);
+    fillNaqd($('naqdList'), naqdItems.length ? naqdItems : data.naqd);
     $('muzakkira').textContent = aj.muzakkira || data.muzakkira;
   } catch (e) {
     fill($('shaklyList'), [`⚠️ خطأ شبكي: ${e.message}`]);
