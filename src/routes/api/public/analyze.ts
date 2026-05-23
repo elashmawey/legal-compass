@@ -247,7 +247,7 @@ export const Route = createFileRoute('/api/public/analyze')({
           await supabaseAdmin
             .from('analysis_cache')
             .upsert(
-              { mode, cache_key: cacheKey, result: parsed as object, updated_at: new Date().toISOString() },
+              { mode, cache_key: cacheKey, result: parsed as never, updated_at: new Date().toISOString() },
               { onConflict: 'mode,cache_key' },
             );
         } catch (e) {
